@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "steporlm-stage1"
+version = "0.1.0"
+description = "Local stage-1 StepORLM scaffold for 4060 8GB."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Codex" }]
+dependencies = [
+    "ortools>=9.10",
+    "PyYAML>=6.0.1",
+    "typer>=0.12.3",
+    "tqdm>=4.66.4",
+    "requests>=2.32.3",
+    "matplotlib>=3.8.4",
+]
+
+[project.scripts]
+steporlm-local = "steporlm_stage1.cli:app"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,14 @@
+base_model_path: models/Qwen2.5-1.5B-Instruct
+model_path: outputs/qwen2.5-1.5b-stage1-lora_runs/sft_train_20260414_224817/weights/final_adapter
+dataset_path: data/processed/stage1_dataset/train.jsonl
+output_path: data/processed/stage1_real_rollouts.jsonl
+run_root: runs
+run_prefix: real_rollouts
+num_return_sequences: 3
+max_new_tokens: 1500
+temperature: 0.35
+top_p: 0.9
+do_sample: true
+load_in_4bit: false
+seed: 2026
+teacher_evaluation: true

@@ -1,0 +1,82 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Logs
+logs/
+*.log
+nohup.out
+
+# Runtime outputs
+outputs/
+results/
+runs/
+reports/
+checkpoints/
+
+# Data and model artifacts
+data/
+!data/.gitkeep
+!data/README.md
+models/
+!models/.gitkeep
+!models/README.md
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Caches
+.cache/
+.hf_cache/
+cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+tmp_smoke/
+*.tmp
+*.temp
+*.bak
+*.orig
+
+# Local environment files
+.env
+.env.*
