@@ -20,6 +20,10 @@ trajectory_temperatures: [0.3]
 trajectory_max_tokens: 1800
 timeout_seconds: 20
 output_dir: data/processed/stage1_dataset
+resume_from_checkpoint: true
+pending_records_file: accepted_pending.jsonl
+state_file: generation_state.json
+trace_file: generation_trace.jsonl
 splits:
   train: 1.0
 template_weights:
