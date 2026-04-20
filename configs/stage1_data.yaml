@@ -1,13 +1,13 @@
 seed: 2026
-target_verified_samples: 120
-max_seed_problems: 40
+target_verified_samples: 720
+max_seed_problems: 900
 data_model_env_var: ZHIPUAI_DATA_MODEL
 data_model_fallback: glm-4.5-air
 request_timeout_seconds: 75
 request_max_retries: 2
 request_retry_backoff_seconds: 1.5
-verbose_generation: true
-question_variants_per_seed: 2
+verbose_generation: false
+question_variants_per_seed: 1
 include_canonical_question: true
 question_rewrite_styles:
   - operations memo
@@ -15,15 +15,13 @@ question_rewrite_styles:
   - procurement brief
 question_rewrite_temperature: 0.6
 question_rewrite_max_tokens: 1200
-trajectories_per_variant: 3
-trajectory_temperatures: [0.25, 0.5, 0.8]
-trajectory_max_tokens: 2200
+trajectories_per_variant: 1
+trajectory_temperatures: [0.3]
+trajectory_max_tokens: 1800
 timeout_seconds: 20
 output_dir: data/processed/stage1_dataset
 splits:
-  train: 0.8
-  valid: 0.1
-  test: 0.1
+  train: 1.0
 template_weights:
   resource_allocation: 1
   production_planning: 1
