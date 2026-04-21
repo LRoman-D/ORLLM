@@ -1,0 +1,17 @@
+{
+  "model_name_or_path": "/root/autodl-tmp/ORLLM/models/Qwen/Qwen2___5-7B-Instruct",
+  "dataset_path": "/root/autodl-tmp/ORLLM/data/processed/stage1_sft/train.jsonl",
+  "output_dir": "/root/autodl-tmp/ORLLM/outputs/qwen2.5-7b-stage1-lora",
+  "max_seq_length": 1024,
+  "learning_rate": 0.00015,
+  "num_train_epochs": 1,
+  "per_device_train_batch_size": 1,
+  "gradient_accumulation_steps": 4,
+  "logging_steps": 10,
+  "save_steps": 50,
+  "lora_r": 16,
+  "lora_alpha": 32,
+  "lora_dropout": 0.05,
+  "load_in_4bit": true,
+  "use_bf16_if_available": true
+}
