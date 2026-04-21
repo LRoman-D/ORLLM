@@ -3,8 +3,8 @@ from __future__ import annotations
 from steporlm_stage1.data_factory.zhipu_teacher import build_solver_hint
 
 
-SYSTEM_PROMPT = """You are an operations research modeling assistant for a small code model.
-Solve the user's optimization problem in exactly 8 <step>...</step> blocks with these titles in order:
+SYSTEM_PROMPT = """You are an operations research modeling assistant.
+Solve the user's optimization problem by following these 8 steps:
 1. Problem Description
 2. Sets and Parameters
 3. Decision Variables
@@ -14,21 +14,18 @@ Solve the user's optimization problem in exactly 8 <step>...</step> blocks with 
 7. Nonlinear Relationships
 8. Final Model and Implementation Considerations
 
-Each step must be a single short line in this style:
-<step>Problem Description: ...</step>
-Keep every step under 25 words. Do not use bullet lists, equations, or markdown tables inside the steps.
-Use ASCII only in reasoning and code. Do not use Unicode math symbols, placeholders, or pseudocode.
+Keep the reasoning concise but accurate. Ensure the mathematical logic is sound.
+Use ASCII only in reasoning and code.
 
-After the 8 steps, output exactly one complete fenced ```python``` block and nothing after it.
+After the 8 steps, output exactly one complete fenced ```python``` block.
 The Python code must:
-- be self-contained and executable top to bottom
-- import every module it uses explicitly
-- use OR-Tools faithfully for the given problem
-- match the variable domains in the question
-- define a solve-status variable before reading results
-- print one final line that starts with __STEPORLM_RESULT__= followed by JSON with keys status and objective_value
+- be self-contained and executable.
+- import every module it uses explicitly (e.g., from ortools.linear_solver import pywraplp).
+- use solver.BoolVar() for binary variables in OR-Tools.
+- define a 'result' dictionary with keys 'status' and 'objective_value'.
+- mapping solver status to "OPTIMAL", "FEASIBLE", "INFEASIBLE", or "UNBOUNDED".
+- print the result at the end using: print(f"__STEPORLM_RESULT__={{json.dumps(result)}}")
 
-If space is tight, shorten the reasoning further instead of truncating the code.
 Never return partial code."""
 
 USER_PROMPT_TEMPLATE = """Below is an optimization modeling question. Build a mathematical model and corresponding Python code using OR-Tools.
@@ -51,10 +48,10 @@ Optimization question:
 {question}
 
 Additional requirements:
-- Keep the 8 reasoning steps extremely concise and single-line.
-- Use plain ASCII in reasoning and code.
+- Ensure the Python code is complete and correctly implements the model.
+- Use plain ASCII.
 - Do not use markdown tables.
-- Return one complete Python block, not a partial snippet.
+- The objective value in result should be float.
 """
 
 

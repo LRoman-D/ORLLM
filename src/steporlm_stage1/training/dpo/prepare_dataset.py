@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import random
 
 from steporlm_stage1.prompts import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE
 from steporlm_stage1.utils.io import ensure_dir, load_yaml_config, read_jsonl, write_json, write_jsonl
@@ -11,6 +12,17 @@ def prepare_dpo_dataset(config_path: str | Path) -> dict[str, int | str]:
     config = load_yaml_config(config_path)
 
     rows = read_jsonl(config["preference_path"])
+    source_pairs = len(rows)
+
+    max_pairs = int(config.get("max_pairs", 0) or 0)
+    shuffle_before_limit = bool(config.get("shuffle_before_limit", True))
+    sampling_seed = int(config.get("sampling_seed", 2026))
+    if max_pairs > 0 and len(rows) > max_pairs:
+        if shuffle_before_limit:
+            rng = random.Random(sampling_seed)
+            rng.shuffle(rows)
+        rows = rows[:max_pairs]
+
     if config.get("output_dir"):
         output_dir = ensure_dir(config["output_dir"])
     else:
@@ -38,6 +50,15 @@ def prepare_dpo_dataset(config_path: str | Path) -> dict[str, int | str]:
     valid_rows = converted[split_idx:]
     write_jsonl(output_dir / "train.jsonl", train_rows)
     write_jsonl(output_dir / "valid.jsonl", valid_rows)
-    summary = {"train": len(train_rows), "valid": len(valid_rows), "output_dir": str(output_dir)}
+    summary = {
+        "source_pairs": source_pairs,
+        "selected_pairs": len(converted),
+        "max_pairs": max_pairs,
+        "shuffle_before_limit": shuffle_before_limit,
+        "sampling_seed": sampling_seed,
+        "train": len(train_rows),
+        "valid": len(valid_rows),
+        "output_dir": str(output_dir),
+    }
     write_json(output_dir / "summary.json", summary)
     return summary
