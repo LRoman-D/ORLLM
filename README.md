@@ -29,15 +29,17 @@ Git 默认管理代码与配置；本次 `cloud` 分支额外跟踪了指定的�
 
 ## 2. 目录职责划分
 
-| 目录 | 内容 | Git 管理 | 说明 |
-| :--- | :--- | :--- | :--- |
-| `src/` | 业务逻辑、算法实现 | 是 | 核心代码 |
-| `configs/` | YAML 配置文件 | 是 | 实验参数 |
-| `data/` | 数据集与中间数据 | **部分** | 当前分支已纳入 SFT/Stage-1 关键数据 |
-| `models/` | 基座模型 | **否** | 新服务器需自行下载或挂载 |
-| `outputs/` | 训练产物 | **部分** | 当前分支已纳入 7B SFT LoRA 成品 |
-| `logs/` | 运行日志、nohup 输出 | **否** | 持久化存储 |
-| `.cache/` | HF 缓存、Torch 缓存 | **否** | 临时/持久缓存 |
+
+| 目录         | 内容             | Git 管理 | 说明                       |
+| ---------- | -------------- | ------ | ------------------------ |
+| `src/`     | 业务逻辑、算法实现      | 是      | 核心代码                     |
+| `configs/` | YAML 配置文件      | 是      | 实验参数                     |
+| `data/`    | 数据集与中间数据       | **部分** | 当前分支已纳入 SFT/Stage-1 关键数据 |
+| `models/`  | 基座模型           | **否**  | 新服务器需自行下载或挂载             |
+| `outputs/` | 训练产物           | **部分** | 当前分支已纳入 7B SFT LoRA 成品   |
+| `logs/`    | 运行日志、nohup 输出  | **否**  | 持久化存储                    |
+| `.cache/`  | HF 缓存、Torch 缓存 | **否**  | 临时/持久缓存                  |
+
 
 ## 3. 新服务器快速部署
 
@@ -51,6 +53,7 @@ cd ORLLM
 ### 3.2 安装环境
 
 **方法 A: Conda**
+
 ```bash
 conda env create -f environment.yml
 conda activate orllm
@@ -59,6 +62,7 @@ pip install -e .
 ```
 
 **方法 B: Pip + Venv**
+
 ```bash
 bash scripts/setup_env.sh
 source .venv/bin/activate
@@ -155,7 +159,7 @@ bash scripts/run_7b_dpo_pipeline.sh
 
 - 建议使用 `tmux` 或 `screen` 长时运行训练。
 - 可使用 `nohup` 后台运行，例如：
-  `nohup bash scripts/run_7b_dpo_pipeline.sh > logs/run_$(date +%Y%m%d).log 2>&1 &`
+`nohup bash scripts/run_7b_dpo_pipeline.sh > logs/run_$(date +%Y%m%d).log 2>&1 &`
 - `data/`、`outputs/`、`models/`、`.cache/` 都支持通过环境变量映射到持久化目录。
 
 ## 7. 代码与路径约定
