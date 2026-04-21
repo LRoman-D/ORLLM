@@ -1,0 +1,29 @@
+{
+  "generator_backend": "zhipu_teacher",
+  "target_verified_samples": 720,
+  "accepted_samples": 720,
+  "verification_rate": 0.0,
+  "seed_problem_count": 0,
+  "question_variant_count": 0,
+  "attempted_trajectories": 0,
+  "api_request_errors": 0,
+  "trajectories_per_variant": 1,
+  "question_variants_per_seed": 1,
+  "template_distribution": {
+    "resource_allocation": 64,
+    "production_planning": 149,
+    "assignment": 190,
+    "knapsack": 177,
+    "tsp": 140
+  },
+  "splits": {
+    "train": 720
+  },
+  "teacher_model": "glm-4.5-air",
+  "resume_from_checkpoint": true,
+  "pending_records_file": "/root/autodl-tmp/ORLLM/data/processed/stage1_dataset/accepted_pending.jsonl",
+  "state_file": "/root/autodl-tmp/ORLLM/data/processed/stage1_dataset/generation_state.json",
+  "interrupted": false,
+  "completed": true,
+  "recommended_range_for_1p5b": "80-150 verified samples; default target 120"
+}
