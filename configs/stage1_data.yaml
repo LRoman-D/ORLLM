@@ -1,17 +1,24 @@
 seed: 2026
 teacher_backend: qwen_rag
 teacher_model_path: models/Qwen2.5-7B-Instruct
-teacher_load_in_4bit: true
+teacher_load_in_4bit: false
 use_bf16_if_available: true
 rag_index_dir: data/rag/or_books
-rag_top_k: 4
+rag_candidate_top_k: 30
+rag_top_k: 5
 rag_max_context_chars: 5000
+rag_use_semantic_rerank: true
+rag_reranker_model: BAAI/bge-reranker-base
+rag_reranker_batch_size: 16
+rag_reranker_max_length: 512
+rag_use_query_rewrite: false
+rag_fail_on_reranker_error: false
 
-target_verified_samples: 120
-max_seed_problems: 240
+target_verified_samples: 240
+max_seed_problems: 480
 verbose_generation: true
-question_variants_per_seed: 2
-include_canonical_question: false
+question_variants_per_seed: 3
+include_canonical_question: true
 question_rewrite_styles:
   - operations memo
   - planner handoff
@@ -19,12 +26,14 @@ question_rewrite_styles:
   - classroom modeling exercise
   - internal analytics request
   - field dispatch note
-question_rewrite_temperature: 0.75
-question_rewrite_max_tokens: 900
-trajectories_per_variant: 2
-trajectory_temperatures: [0.2, 0.55]
-trajectory_max_tokens: 1800
-timeout_seconds: 20
+question_rewrite_temperature: 0.45
+question_rewrite_max_tokens: 700
+trajectories_per_variant: 4
+trajectory_temperatures: [0.0, 0.15, 0.3, 0.45]
+trajectory_top_p: 0.92
+trajectory_repetition_penalty: 1.03
+trajectory_max_tokens: 2200
+timeout_seconds: 30
 output_dir: data/processed/stage1_dataset
 resume_from_checkpoint: true
 pending_records_file: accepted_pending.jsonl

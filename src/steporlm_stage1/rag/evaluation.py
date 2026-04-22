@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from steporlm_stage1.rag.index import KeywordRagRetriever, tokenize
+from steporlm_stage1.rag.index import HybridRagRetriever, tokenize
 from steporlm_stage1.utils.io import load_yaml_config, read_jsonl, write_json
 
 
@@ -32,8 +32,17 @@ DEFAULT_PROBES = [
 
 def evaluate_rag_retrieval(config_path: str | Path = "configs/rag_eval.yaml") -> dict:
     config = load_yaml_config(config_path)
-    retriever = KeywordRagRetriever(config.get("index_dir", "data/rag/or_books"))
-    top_k = int(config.get("top_k", 4))
+    retriever = HybridRagRetriever(
+        config.get("index_dir", "data/rag/or_books"),
+        use_semantic_rerank=bool(config.get("use_semantic_rerank", True)),
+        reranker_model_name_or_path=str(config.get("reranker_model", "BAAI/bge-reranker-base")),
+        reranker_batch_size=int(config.get("reranker_batch_size", 8)),
+        reranker_max_length=int(config.get("reranker_max_length", 512)),
+        use_query_rewrite=bool(config.get("use_query_rewrite", False)),
+        fail_on_reranker_error=bool(config.get("fail_on_reranker_error", False)),
+    )
+    top_k = int(config.get("top_k", 5))
+    candidate_top_k = int(config.get("candidate_top_k", 25))
     probes = list(config.get("probes") or DEFAULT_PROBES)
 
     rows = []
@@ -41,7 +50,7 @@ def evaluate_rag_retrieval(config_path: str | Path = "configs/rag_eval.yaml") ->
     coverage_values = []
     source_names: set[str] = set()
     for probe in probes:
-        results = retriever.search(str(probe["query"]), top_k=top_k)
+        results = retriever.search(str(probe["query"]), candidate_top_k=candidate_top_k, top_k=top_k)
         combined = " ".join(str(item.get("text", "")) for item in results).lower()
         combined_tokens = set(tokenize(combined))
         expected_terms = [str(item).lower() for item in probe.get("expected_terms", [])]
@@ -65,6 +74,8 @@ def evaluate_rag_retrieval(config_path: str | Path = "configs/rag_eval.yaml") ->
                         "chunk_id": item.get("chunk_id"),
                         "source_name": item.get("source_name"),
                         "page_start": item.get("page_start"),
+                        "keyword_score": item.get("keyword_score"),
+                        "rerank_score": item.get("rerank_score"),
                         "score": item.get("score"),
                     }
                     for item in results
@@ -74,7 +85,9 @@ def evaluate_rag_retrieval(config_path: str | Path = "configs/rag_eval.yaml") ->
 
     summary = {
         "num_probes": len(probes),
+        "candidate_top_k": candidate_top_k,
         "top_k": top_k,
+        "semantic_rerank_enabled": bool(retriever.semantic_rerank_enabled),
         "hit_rate": round(hit_count / len(probes), 4) if probes else 0.0,
         "mean_expected_term_coverage": round(sum(coverage_values) / len(coverage_values), 4) if coverage_values else 0.0,
         "source_diversity": len(source_names),

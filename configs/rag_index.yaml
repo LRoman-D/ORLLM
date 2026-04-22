@@ -1,5 +1,7 @@
 source_dir: referencebooks
 output_dir: data/rag/or_books
-chunk_size: 1800
-overlap: 220
+chunk_target_words: 450
+chunk_min_words: 300
+chunk_max_words: 600
+overlap_ratio: 0.15
 min_chunk_chars: 200

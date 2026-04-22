@@ -45,20 +45,36 @@ print({"source": str(src), "target": str(dst), "rows": len(rows)})
 PY
 
 echo "[$(date '+%F %T')] Step 2/6: rollout on 500 training samples (resumable)"
-python -m steporlm_stage1.cli generate-real-rollouts --config-path configs/stage1_real_rollout_7b_720.yaml
+python - <<'PY'
+from steporlm_stage1.rollout.generate_real_rollouts import generate_real_rollouts_from_config
+from steporlm_stage1.utils.io import load_yaml_config
+
+config = load_yaml_config("configs/stage1_real_rollout.yaml")
+config.update(
+    {
+        "dataset_path": "data/processed/stage1_dataset/train_500.jsonl",
+        "output_path": "outputs/runs/real_rollouts_7b_720/real_rollouts.jsonl",
+        "run_prefix": "real_rollouts_7b_720",
+        "teacher_evaluation": True,
+        "resume_from_checkpoint": True,
+    }
+)
+summary = generate_real_rollouts_from_config(config)
+print(summary)
+PY
 
 echo "[$(date '+%F %T')] Step 3/6: build preference pairs"
 python -m steporlm_stage1.cli build-preferences \
   --rollout-path outputs/runs/real_rollouts_7b_720/real_rollouts.jsonl \
-  --output-path outputs/runs/preferences_7b_720/preferences.jsonl \
+  --output-path outputs/runs/preferences_7b/preferences.jsonl \
   --run-root runs \
-  --run-prefix preferences_7b_720 \
+  --run-prefix preferences_7b \
   --require-chosen-success
 
 echo "[$(date '+%F %T')] Step 4/6: prepare DPO dataset (cap=300)"
-python -m steporlm_stage1.cli prepare-dpo --config-path configs/stage1_dpo_data_7b.yaml
+python -m steporlm_stage1.cli prepare-dpo --config-path configs/stage1_dpo_data.yaml
 
-TRAIN_ROWS=$(wc -l < outputs/runs/dpo_data_7b_720/train.jsonl || echo 0)
+TRAIN_ROWS=$(wc -l < outputs/runs/dpo_data_7b/train.jsonl || echo 0)
 echo "[$(date '+%F %T')] DPO train rows: $TRAIN_ROWS"
 if [[ "$TRAIN_ROWS" -le 0 ]]; then
   echo "[error] No DPO training rows generated from success-constrained preferences. Stop here." >&2
@@ -66,9 +82,9 @@ if [[ "$TRAIN_ROWS" -le 0 ]]; then
 fi
 
 echo "[$(date '+%F %T')] Step 5/6: train DPO model (checkpointed)"
-python -m steporlm_stage1.cli train-dpo --config-path configs/stage1_dpo_train_7b.yaml
+python -m steporlm_stage1.cli train-dpo --config-path configs/stage1_dpo_train.yaml
 
-echo "[$(date '+%F %T')] Step 6/6: compare base vs SFT vs DPO on 300 generated questions"
-python -m steporlm_stage1.cli compare-models --config-path configs/stage1_compare_7b_300.yaml
+echo "[$(date '+%F %T')] Step 6/6: compare base vs SFT vs DPO using configs/stage1_compare.yaml"
+python -m steporlm_stage1.cli compare-models --config-path configs/stage1_compare.yaml
 
 echo "[$(date '+%F %T')] Pipeline completed successfully"

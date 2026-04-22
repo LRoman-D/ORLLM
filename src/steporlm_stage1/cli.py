@@ -102,7 +102,7 @@ def evaluate(
 
 
 @app.command("evaluate-model")
-def evaluate_model_cmd(config_path: str = "configs/stage1_test_eval.yaml") -> None:
+def evaluate_model_cmd(config_path: str = "configs/stage1_real_rollout.yaml") -> None:
     from steporlm_stage1.evaluation.evaluate_model import evaluate_model
 
     summary = evaluate_model(config_path)
@@ -114,6 +114,14 @@ def compare_models_cmd(config_path: str = "configs/stage1_compare.yaml") -> None
     from steporlm_stage1.evaluation.compare_models import compare_models
 
     summary = compare_models(config_path)
+    typer.echo(summary)
+
+
+@app.command("rag-ablation")
+def rag_ablation_cmd(config_path: str = "configs/rag_ablation_20_semantic_v2.yaml") -> None:
+    from steporlm_stage1.evaluation.rag_ablation import run_rag_ablation
+
+    summary = run_rag_ablation(config_path)
     typer.echo(summary)
 
 

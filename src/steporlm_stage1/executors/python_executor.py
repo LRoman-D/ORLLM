@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import json
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -10,8 +11,9 @@ from steporlm_stage1.schemas import ReferenceSolution, VerificationResult
 
 
 class PythonCodeExecutor:
-    def __init__(self, timeout_seconds: int = 20) -> None:
+    def __init__(self, timeout_seconds: int = 20, python_executable: str | None = None) -> None:
         self.timeout_seconds = timeout_seconds
+        self.python_executable = python_executable or sys.executable
 
     def verify(self, code: str, reference: ReferenceSolution, tolerance: float = 1e-4) -> VerificationResult:
         marker = "__STEPORLM_RESULT__="
@@ -20,7 +22,7 @@ class PythonCodeExecutor:
             script_path.write_text(code, encoding="utf-8")
             try:
                 completed = subprocess.run(
-                    ["python", str(script_path)],
+                    [self.python_executable, str(script_path)],
                     cwd=tmp_dir,
                     check=False,
                     capture_output=True,

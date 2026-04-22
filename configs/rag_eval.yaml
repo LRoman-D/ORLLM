@@ -1,5 +1,12 @@
 index_dir: data/rag/or_books
-top_k: 4
+candidate_top_k: 25
+top_k: 5
+use_semantic_rerank: true
+reranker_model: BAAI/bge-reranker-base
+reranker_batch_size: 8
+reranker_max_length: 512
+use_query_rewrite: false
+fail_on_reranker_error: false
 output_path: data/rag/or_books/retrieval_eval.json
 probes:
   - name: linear_programming

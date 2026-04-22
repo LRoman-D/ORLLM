@@ -1,0 +1,40 @@
+run_root: runs
+run_prefix: rag_ablation_20_semantic_v2
+
+benchmark:
+  seed: 2026
+  target_questions: 20
+  template_weights:
+    resource_allocation: 1
+    production_planning: 1
+    assignment: 1
+    knapsack: 1
+    tsp: 1
+
+  teacher_model_path: models/Qwen2.5-7B-Instruct
+  teacher_load_in_4bit: false
+  use_bf16_if_available: true
+
+  rag_index_dir: data/rag/or_books
+  rag_candidate_top_k: 30
+  rag_top_k: 5
+  rag_max_context_chars: 4500
+  rag_context_max_chunk_chars: 1000
+  rag_context_include_scores: false
+  rag_use_semantic_rerank: true
+  rag_reranker_model: models/msmarco-minilm-reranker
+  rag_reranker_batch_size: 16
+  rag_reranker_max_length: 256
+  rag_rerank_keyword_blend: 0.62
+  rag_modeling_boost: 0.12
+  rag_use_query_rewrite: false
+  rag_fail_on_reranker_error: true
+
+  trajectory_top_p: 0.9
+  trajectory_repetition_penalty: 1.05
+
+rollout:
+  trajectory_temperatures: [0.15, 0.35]
+  max_new_tokens: 1600
+  timeout_seconds: 30
+  no_rag_top_k: 0

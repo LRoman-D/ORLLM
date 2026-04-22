@@ -35,6 +35,7 @@ Use these step titles in order:
 After the 8 steps, output exactly one fenced ```python``` block.
 The Python code must:
 - be self-contained
+- include `import json`
 - use OR-Tools
 - solve the problem faithfully
 - call solver.Solve()
@@ -48,6 +49,10 @@ The Python code must:
 - do not call `solver.status_name()`
 - when printing the result marker, use exactly:
   `print("__STEPORLM_RESULT__=" + json.dumps({"status": "OPTIMAL", "objective_value": 123.0}, ensure_ascii=False))`
+- preserve all numeric values, sets, and constraints from the question exactly (never alter coefficients or bounds)
+- avoid randomization in code unless the question explicitly requires stochastic simulation
+- ensure `objective_value` is numeric (float/int) when available; use `None` when no valid objective is available
+- keep code deterministic, minimal, and directly executable in one run
 
 Do not output any extra text after the Python block.
 """

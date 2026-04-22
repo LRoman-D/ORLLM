@@ -5,23 +5,32 @@ teacher_evaluation: false
 benchmark:
   teacher_backend: qwen_rag
   teacher_model_path: models/Qwen2.5-7B-Instruct
-  teacher_load_in_4bit: true
+  teacher_load_in_4bit: false
   rag_index_dir: data/rag/or_books
-  rag_top_k: 4
+  rag_candidate_top_k: 30
+  rag_top_k: 5
   rag_max_context_chars: 5000
+  rag_use_semantic_rerank: true
+  rag_reranker_model: BAAI/bge-reranker-base
+  rag_reranker_batch_size: 16
+  rag_reranker_max_length: 512
+  rag_use_query_rewrite: false
+  rag_fail_on_reranker_error: false
   seed: 2026
   target_questions: 120
   max_seed_problems: 120
-  question_variants_per_seed: 1
-  include_canonical_question: false
+  question_variants_per_seed: 2
+  include_canonical_question: true
   question_rewrite_styles:
     - operations memo
     - planner handoff
     - procurement brief
     - classroom modeling exercise
     - internal analytics request
-  question_rewrite_temperature: 0.7
-  question_rewrite_max_tokens: 900
+  question_rewrite_temperature: 0.45
+  question_rewrite_max_tokens: 700
+  trajectory_top_p: 0.92
+  trajectory_repetition_penalty: 1.03
   template_weights:
     resource_allocation: 1
     production_planning: 1
@@ -30,13 +39,13 @@ benchmark:
     tsp: 1
 
 rollout:
-  num_return_sequences: 2
-  max_new_tokens: 700
-  temperature: 0.7
-  top_p: 0.9
+  num_return_sequences: 4
+  max_new_tokens: 1000
+  temperature: 0.3
+  top_p: 0.92
   do_sample: true
-  load_in_4bit: true
-  timeout_seconds: 20
+  load_in_4bit: false
+  timeout_seconds: 30
   seed: 2026
 
 models:
