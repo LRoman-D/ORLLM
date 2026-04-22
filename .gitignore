@@ -34,9 +34,6 @@ nohup.out
 outputs/*
 !outputs/qwen2.5-7b-stage1-lora/
 !outputs/qwen2.5-7b-stage1-lora/**
-!outputs/qwen2.5-7b-stage1-lora_runs/
-!outputs/qwen2.5-7b-stage1-lora_runs/sft_train_20260421_004434/
-!outputs/qwen2.5-7b-stage1-lora_runs/sft_train_20260421_004434/**
 results/
 runs/
 reports/
@@ -54,6 +51,8 @@ data/*
 models/*
 !models/.gitkeep
 !models/README.md
+referencebooks/*
+!referencebooks/.gitkeep
 *.bin
 !outputs/qwen2.5-7b-stage1-lora/training_args.bin
 !outputs/qwen2.5-7b-stage1-lora_runs/sft_train_20260421_004434/weights/final_adapter/training_args.bin
@@ -62,7 +61,6 @@ models/*
 *.ckpt
 *.safetensors
 !outputs/qwen2.5-7b-stage1-lora/adapter_model.safetensors
-!outputs/qwen2.5-7b-stage1-lora_runs/sft_train_20260421_004434/weights/final_adapter/adapter_model.safetensors
 
 # Caches
 .cache/

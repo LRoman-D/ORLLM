@@ -18,7 +18,7 @@ if command -v conda >/dev/null 2>&1; then
     echo "Conda detected. Recommended commands:"
     echo "  conda env create -f environment.yml"
     echo "  conda activate orllm"
-    echo "  pip install -r requirements-train.txt"
+    echo "  pip install -r requirements.txt"
     echo "  pip install -e ."
 else
     echo "Conda not found. Setting up with venv and pip..."
@@ -26,7 +26,6 @@ else
     source .venv/bin/activate
     pip install --upgrade pip
     pip install -r requirements.txt
-    pip install -r requirements-train.txt
     pip install -e .
 fi
 
@@ -43,7 +42,7 @@ fi
 echo "=== [4/4] Model Path Reminder ==="
 echo "This branch already includes SFT data and LoRA adapter artifacts."
 echo "You still need to prepare the base model at:"
-echo "  $PROJECT_ROOT/models/Qwen/Qwen2.5-7B-Instruct"
+echo "  $PROJECT_ROOT/models/Qwen2.5-7B-Instruct"
 echo "A symlink to the real model directory is also acceptable."
 
 echo "---"
@@ -52,5 +51,6 @@ echo "Next steps:"
 echo "1. Activate your environment (conda activate orllm or source .venv/bin/activate)"
 echo "2. Edit .env with your credentials"
 echo "3. Ensure the base model path exists"
-echo "4. Continue training with: bash scripts/run_7b_dpo_pipeline.sh"
-echo "5. Or run SFT only with: python -m steporlm_stage1.cli train-lora --config-path configs/stage1_sft.yaml"
+echo "4. Build the RAG index with: python -m steporlm_stage1.cli build-rag-index --config-path configs/rag_index.yaml"
+echo "5. Generate RAG SFT data with: python -m steporlm_stage1.cli generate-dataset --config-path configs/stage1_data.yaml"
+echo "6. Or continue training with: bash scripts/run_7b_dpo_pipeline.sh"

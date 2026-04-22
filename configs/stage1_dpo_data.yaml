@@ -1,9 +1,6 @@
 # Replace this with the timestamped preference file produced by:
 # steporlm-local build-preferences --rollout-path ...
-preference_path: runs/preferences_clean_20260416_105206/preferences.jsonl
-
-# Leave output_dir empty to auto-create:
-# runs/dpo_data_YYYYMMDD_HHMMSS/
-output_dir:
+preference_path: runs/preferences_7b/preferences.jsonl
+output_dir: runs/dpo_data_7b
 run_root: runs
 run_prefix: dpo_data

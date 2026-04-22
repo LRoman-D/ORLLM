@@ -3,7 +3,9 @@ from __future__ import annotations
 import random
 from pathlib import Path
 
-from steporlm_stage1.data_factory.zhipu_teacher import ZhipuTeacherGenerator
+import torch
+
+from steporlm_stage1.data_factory.teacher_factory import build_teacher_generator, teacher_model_name
 from steporlm_stage1.evaluation.metrics import summarize_best_trajectories
 from steporlm_stage1.rollout.generate_real_rollouts import run_rollout_generation
 from steporlm_stage1.templates.registry import TEMPLATE_REGISTRY
@@ -20,9 +22,9 @@ def _generate_comparison_questions(config: dict, output_path: Path) -> tuple[lis
     question_variants_per_seed = int(config.get("question_variants_per_seed", 1))
     rewrite_styles = list(config.get("question_rewrite_styles", []))
     template_weights = config["template_weights"]
-    generator = ZhipuTeacherGenerator.from_env()
+    generator = build_teacher_generator(config)
     if generator is None:
-        raise RuntimeError("ZHIPUAI_API_KEY is required for comparison question generation.")
+        raise RuntimeError("Teacher generator is required for comparison question generation.")
 
     questions = []
     template_counter = {}
@@ -71,10 +73,13 @@ def _generate_comparison_questions(config: dict, output_path: Path) -> tuple[lis
     write_jsonl(output_path, questions)
     summary = {
         "num_questions": len(questions),
-        "teacher_model": generator.client.config.model,
+        "teacher_model": teacher_model_name(generator),
         "template_distribution": template_counter,
         "output_path": str(output_path),
     }
+    del generator
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     return questions, summary
 
 

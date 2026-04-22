@@ -31,7 +31,10 @@ def load_quant_config(enable_4bit: bool) -> BitsAndBytesConfig | None:
     if not enable_4bit:
         return None
     if importlib.util.find_spec("bitsandbytes") is None:
-        return None
+        raise RuntimeError(
+            "4-bit loading was requested, but bitsandbytes is not installed. "
+            "For a 7B model on an 8GB GPU, run under Linux/WSL with bitsandbytes or point the config to a GPTQ/AWQ quantized model."
+        )
     return BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
@@ -73,7 +76,7 @@ def load_causal_lm(
         "trust_remote_code": True,
         "device_map": device_map_override if device_map_override is not None else ("auto" if torch.cuda.is_available() else None),
         "quantization_config": quant_config,
-        "dtype": dtype,
+        "torch_dtype": dtype,
     }
     if is_adapter:
         adapter_path = resolved_model_path

@@ -21,7 +21,10 @@ def _load_quant_config(config: dict) -> BitsAndBytesConfig | None:
     if not config.get("load_in_4bit", False):
         return None
     if importlib.util.find_spec("bitsandbytes") is None:
-        return None
+        raise RuntimeError(
+            "4-bit training was requested, but bitsandbytes is not installed. "
+            "Use Linux/WSL for QLoRA on an 8GB GPU, or disable load_in_4bit only if you have enough memory."
+        )
     return BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",

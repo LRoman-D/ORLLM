@@ -25,18 +25,32 @@ class KnapsackTemplate(ProblemTemplate):
             "values": values,
             "weights": weights,
             "capacity": capacity,
-            "scenario": rng.choice(["应急运维背包", "现场部署设备包", "移动巡检资源包"]),
+            "scenario": rng.choice(
+                [
+                    "emergency maintenance kit",
+                    "field deployment equipment pack",
+                    "mobile inspection resource bag",
+                    "temporary network recovery kit",
+                    "remote site diagnostics loadout",
+                ]
+            ),
         }
 
     def render_question(self, instance: dict, rng: random.Random) -> str:
         lines = []
         for item in instance["items"]:
-            lines.append(f"- {item}: 价值 {instance['values'][item]}，重量 {instance['weights'][item]}。")
+            lines.append(f"- {item}: value {instance['values'][item]}, weight {instance['weights'][item]}.")
+        framing = rng.choice(
+            [
+                "Select a subset of items without exceeding the weight limit.",
+                "The team can either pack an item once or leave it behind.",
+                "The goal is to maximize total carried value under the capacity limit.",
+            ]
+        )
         return (
-            f"某{instance['scenario']}最多只能携带总重量 {instance['capacity']} 的物资，需要在若干候选设备中选择是否装入，"
-            "使总价值最大。\n"
+            f"For a {instance['scenario']}, the maximum total weight is {instance['capacity']}. {framing}\n"
             + "\n".join(lines)
-            + "\n请建立 0-1 背包模型，并给出可执行的 OR-Tools Python 代码。"
+            + "\nBuild a 0-1 knapsack model and provide executable OR-Tools Python code."
         )
 
     def solve_reference(self, instance: dict) -> ReferenceSolution:

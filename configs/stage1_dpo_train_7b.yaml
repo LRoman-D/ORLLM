@@ -1,4 +1,4 @@
-model_name_or_path: models/Qwen/Qwen2.5-7B-Instruct
+model_name_or_path: models/Qwen2.5-7B-Instruct
 sft_adapter_path: outputs/qwen2.5-7b-stage1-lora
 dataset_path: runs/dpo_data_7b_720/train.jsonl
 output_dir: outputs/qwen2.5-7b-stage1-dpo

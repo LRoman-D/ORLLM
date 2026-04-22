@@ -1,4 +1,4 @@
-base_model_path: models/Qwen/Qwen2.5-7B-Instruct
+base_model_path: models/Qwen2.5-7B-Instruct
 model_path: outputs/qwen2.5-7b-stage1-lora
 is_adapter: true
 dataset_path: data/processed/stage1_dataset/train_500.jsonl

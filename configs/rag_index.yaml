@@ -1,0 +1,5 @@
+source_dir: referencebooks
+output_dir: data/rag/or_books
+chunk_size: 1800
+overlap: 220
+min_chunk_chars: 200

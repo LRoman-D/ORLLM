@@ -13,7 +13,7 @@ class ProductionPlanningTemplate(ProblemTemplate):
     optimization_sense = "maximize"
 
     def sample_instance(self, rng: random.Random) -> dict:
-        product_pool = ["battery packs", "control units", "sensor kits", "power modules", "cooling racks"]
+        product_pool = ["battery packs", "control units", "sensor kits", "power modules", "cooling racks", "charging hubs"]
         num_products = rng.randint(3, 4)
         products = rng.sample(product_pool, num_products)
         margin = {product: rng.randint(18, 36) for product in products}
@@ -28,20 +28,36 @@ class ProductionPlanningTemplate(ProblemTemplate):
             "max_units": max_units,
             "labor_hours": labor_hours,
             "total_hours": total_hours,
-            "scenario": rng.choice(["智能工厂周生产计划", "电子装配车间周排产", "工业设备小批量计划"]),
+            "scenario": rng.choice(
+                [
+                    "smart factory weekly planning",
+                    "electronics assembly schedule",
+                    "small-batch industrial equipment planning",
+                    "after-sales parts production",
+                    "prototype manufacturing slotting",
+                ]
+            ),
         }
 
     def render_question(self, instance: dict, rng: random.Random) -> str:
         lines = []
         for product in instance["products"]:
             lines.append(
-                f"- {product}: 单位贡献利润 {instance['margin'][product]}，启用后固定准备成本 {instance['setup_cost'][product]}，"
-                f"每单位需要 {instance['labor_hours'][product]} 小时工时，最多可生产 {instance['max_units'][product]} 单位。"
+                f"- {product}: unit margin {instance['margin'][product]}, setup cost {instance['setup_cost'][product]}, "
+                f"labor {instance['labor_hours'][product]} hours per unit, maximum {instance['max_units'][product]} units."
             )
+        framing = rng.choice(
+            [
+                "Choose which products to open and how many units to make.",
+                "Prepare a MILP that links setup decisions to production quantities.",
+                "The plan may skip a product if its setup cost is not justified.",
+            ]
+        )
         return (
-            f"某{instance['scenario']}需要决定哪些产品投产以及各自的产量，以在总工时不超过 {instance['total_hours']} 的前提下最大化净利润。\n"
+            f"For {instance['scenario']}, total labor cannot exceed {instance['total_hours']} hours. {framing} "
+            "The objective is to maximize net profit after setup costs.\n"
             + "\n".join(lines)
-            + "\n要求建立一个包含整数变量与启用变量的 MILP 模型，并给出 OR-Tools Python 代码。"
+            + "\nBuild a MILP with integer production variables and binary activation variables, then provide OR-Tools Python code."
         )
 
     def solve_reference(self, instance: dict) -> ReferenceSolution:

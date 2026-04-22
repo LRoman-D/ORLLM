@@ -20,19 +20,33 @@ class AssignmentTemplate(ProblemTemplate):
             "workers": workers,
             "tasks": tasks,
             "costs": costs,
-            "scenario": rng.choice(["运筹调度团队", "运营优化小组", "物流协调班组"]),
+            "scenario": rng.choice(
+                [
+                    "transport scheduling team",
+                    "operations optimization group",
+                    "logistics coordination shift",
+                    "field service dispatch desk",
+                    "warehouse process-improvement team",
+                ]
+            ),
         }
 
     def render_question(self, instance: dict, rng: random.Random) -> str:
         lines = []
         for worker in instance["workers"]:
-            costs = "，".join(f"{task}: {instance['costs'][worker][task]}" for task in instance["tasks"])
-            lines.append(f"- {worker} 执行各任务的成本为：{costs}。")
+            costs = "; ".join(f"{task}: {instance['costs'][worker][task]}" for task in instance["tasks"])
+            lines.append(f"- Costs for {worker}: {costs}.")
+        framing = rng.choice(
+            [
+                "Each person must take exactly one task and each task needs exactly one person.",
+                "The manager wants a one-to-one assignment with minimum total cost.",
+                "No worker can be assigned to two tasks, and no task can be left uncovered.",
+            ]
+        )
         return (
-            f"某{instance['scenario']}要把 {len(instance['tasks'])} 个任务分配给 {len(instance['workers'])} 名成员，"
-            "每个任务恰好分配给 1 人，每人恰好承担 1 个任务，目标是最小化总分配成本。\n"
+            f"A {instance['scenario']} must assign {len(instance['tasks'])} tasks to {len(instance['workers'])} workers. {framing}\n"
             + "\n".join(lines)
-            + "\n请建立 assignment 问题的 MILP 模型并给出 OR-Tools Python 代码。"
+            + "\nFormulate the assignment MILP and provide executable OR-Tools Python code."
         )
 
     def solve_reference(self, instance: dict) -> ReferenceSolution:

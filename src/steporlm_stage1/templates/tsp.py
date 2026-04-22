@@ -27,21 +27,34 @@ class TSPTemplate(ProblemTemplate):
         return {
             "cities": cities,
             "distances": distances,
-            "scenario": rng.choice(["巡检巴士路线", "城际配送路线", "服务工程师访问路线"]),
+            "scenario": rng.choice(
+                [
+                    "inspection shuttle route",
+                    "intercity delivery tour",
+                    "service engineer visit route",
+                    "regional calibration trip",
+                    "same-day spare-parts circuit",
+                ]
+            ),
         }
 
     def render_question(self, instance: dict, rng: random.Random) -> str:
         lines = []
         for city in instance["cities"]:
-            costs = "，".join(
-                f"到 {other} 为 {instance['distances'][city][other]}" for other in instance["cities"] if other != city
-            )
-            lines.append(f"- 从 {city} 出发：{costs}。")
+            costs = "; ".join(f"to {other}: {instance['distances'][city][other]}" for other in instance["cities"] if other != city)
+            lines.append(f"- From {city}: {costs}.")
+        framing = rng.choice(
+            [
+                "Start at one city, visit every other city exactly once, and return to the start.",
+                "Find the minimum-cost closed tour over all listed cities.",
+                "The route must avoid subtours and cover every city exactly once.",
+            ]
+        )
         return (
-            f"某{instance['scenario']}需要从一个城市出发并最终回到起点，且每个城市恰好访问一次，目标是最小化总路程成本。\n"
-            f"城市集合为：{', '.join(instance['cities'])}。\n"
+            f"For a {instance['scenario']}, {framing}\n"
+            f"City set: {', '.join(instance['cities'])}.\n"
             + "\n".join(lines)
-            + "\n请建立一个包含 subtour elimination 的 TSP 模型，并给出 OR-Tools Python 代码。"
+            + "\nBuild a TSP model and provide executable OR-Tools Python code."
         )
 
     def solve_reference(self, instance: dict) -> ReferenceSolution:

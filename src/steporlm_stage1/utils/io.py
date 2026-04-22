@@ -14,15 +14,19 @@ CONFIG_PATH_KEYS = {
     "config_path",
     "dataset_path",
     "input_dir",
+    "index_dir",
     "model_name_or_path",
     "model_path",
     "output_dir",
     "output_path",
     "preference_path",
+    "rag_index_dir",
     "report_dir",
     "root",
     "run_root",
     "sft_adapter_path",
+    "source_dir",
+    "teacher_model_path",
 }
 
 

@@ -6,12 +6,11 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-if [[ ! -f .venv/bin/activate ]]; then
-  echo "[error] .venv not found at $PROJECT_ROOT/.venv" >&2
-  exit 1
+if [[ -f .venv/bin/activate ]]; then
+  source .venv/bin/activate
+elif [[ "${CONDA_DEFAULT_ENV:-}" != "orllm" ]]; then
+  echo "[warn] .venv not found and CONDA_DEFAULT_ENV is not 'orllm'. Activate orllm before running this script." >&2
 fi
-
-source .venv/bin/activate
 
 if [[ -f .env ]]; then
   set -a
@@ -22,7 +21,12 @@ fi
 export PYTHONUNBUFFERED=1
 mkdir -p logs runs/preferences_7b_720
 
-echo "[$(date '+%F %T')] Step 0/5: prepare deterministic 500-sample rollout source"
+echo "[$(date '+%F %T')] Step 0/6: ensure RAG index exists"
+if [[ ! -f data/rag/or_books/chunks.jsonl ]]; then
+  python -m steporlm_stage1.cli build-rag-index --config-path configs/rag_index.yaml
+fi
+
+echo "[$(date '+%F %T')] Step 1/6: prepare deterministic 500-sample rollout source"
 python - <<'PY'
 from pathlib import Path
 
@@ -40,10 +44,10 @@ with dst.open("w", encoding="utf-8") as f:
 print({"source": str(src), "target": str(dst), "rows": len(rows)})
 PY
 
-echo "[$(date '+%F %T')] Step 1/5: rollout on 500 training samples (resumable)"
+echo "[$(date '+%F %T')] Step 2/6: rollout on 500 training samples (resumable)"
 python -m steporlm_stage1.cli generate-real-rollouts --config-path configs/stage1_real_rollout_7b_720.yaml
 
-echo "[$(date '+%F %T')] Step 2/5: build preference pairs"
+echo "[$(date '+%F %T')] Step 3/6: build preference pairs"
 python -m steporlm_stage1.cli build-preferences \
   --rollout-path outputs/runs/real_rollouts_7b_720/real_rollouts.jsonl \
   --output-path outputs/runs/preferences_7b_720/preferences.jsonl \
@@ -51,7 +55,7 @@ python -m steporlm_stage1.cli build-preferences \
   --run-prefix preferences_7b_720 \
   --require-chosen-success
 
-echo "[$(date '+%F %T')] Step 3/5: prepare DPO dataset (cap=300)"
+echo "[$(date '+%F %T')] Step 4/6: prepare DPO dataset (cap=300)"
 python -m steporlm_stage1.cli prepare-dpo --config-path configs/stage1_dpo_data_7b.yaml
 
 TRAIN_ROWS=$(wc -l < outputs/runs/dpo_data_7b_720/train.jsonl || echo 0)
@@ -61,10 +65,10 @@ if [[ "$TRAIN_ROWS" -le 0 ]]; then
   exit 2
 fi
 
-echo "[$(date '+%F %T')] Step 4/5: train DPO model (checkpointed)"
+echo "[$(date '+%F %T')] Step 5/6: train DPO model (checkpointed)"
 python -m steporlm_stage1.cli train-dpo --config-path configs/stage1_dpo_train_7b.yaml
 
-echo "[$(date '+%F %T')] Step 5/5: compare base vs SFT vs DPO on 300 generated questions"
+echo "[$(date '+%F %T')] Step 6/6: compare base vs SFT vs DPO on 300 generated questions"
 python -m steporlm_stage1.cli compare-models --config-path configs/stage1_compare_7b_300.yaml
 
 echo "[$(date '+%F %T')] Pipeline completed successfully"

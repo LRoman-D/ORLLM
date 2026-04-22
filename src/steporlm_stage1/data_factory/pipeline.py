@@ -10,7 +10,7 @@ from typing import Any
 
 from tqdm import tqdm
 
-from steporlm_stage1.data_factory.zhipu_teacher import ZhipuTeacherGenerator
+from steporlm_stage1.data_factory.teacher_factory import build_teacher_generator, teacher_backend_name, teacher_model_name
 from steporlm_stage1.executors.python_executor import PythonCodeExecutor
 from steporlm_stage1.schemas import DatasetRecord
 from steporlm_stage1.templates.registry import TEMPLATE_REGISTRY
@@ -23,13 +23,7 @@ class Stage1DataFactory:
         self.config = config
         self.rng = random.Random(config["seed"])
         self.executor = PythonCodeExecutor(timeout_seconds=config.get("timeout_seconds", 20))
-        self.teacher_generator = ZhipuTeacherGenerator.from_env(
-            model_env_var=str(config.get("data_model_env_var", "ZHIPUAI_DATA_MODEL")),
-            timeout_seconds=int(config.get("request_timeout_seconds", 60)),
-            max_retries=int(config.get("request_max_retries", 2)),
-            retry_backoff_seconds=float(config.get("request_retry_backoff_seconds", 1.5)),
-            fallback_model=str(config.get("data_model_fallback", "glm-4.5-air")),
-        )
+        self.teacher_generator = build_teacher_generator(config)
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "Stage1DataFactory":
@@ -200,7 +194,7 @@ class Stage1DataFactory:
 
     def _generate_teacher_dataset(self) -> dict[str, int | float | dict | str]:
         if self.teacher_generator is None:
-            raise RuntimeError("ZHIPUAI_API_KEY is not set. Set the environment variable before running generate-dataset.")
+            raise RuntimeError("Teacher generator is not available. Check teacher_backend, model path, RAG index, or API env vars.")
 
         output_dir = ensure_dir(self.config["output_dir"])
         target_verified = int(self.config.get("target_verified_samples", self.config.get("num_samples", 120)))
@@ -359,12 +353,13 @@ class Stage1DataFactory:
                             reference_solution=reference.to_dict(),
                             verification=verification.to_dict(),
                             generation_notes={
-                                "generator_backend": "zhipu_teacher",
-                                "teacher_model": self.teacher_generator.client.config.model,
+                                "generator_backend": teacher_backend_name(self.teacher_generator),
+                                "teacher_model": teacher_model_name(self.teacher_generator),
                                 "seed_problem_index": seed_idx,
                                 "question_variant_index": variant_idx,
                                 "temperature": temperatures[min(traj_idx, len(temperatures) - 1)],
                                 "canonical_question": canonical_question,
+                                "rag_retrieval": getattr(self.teacher_generator, "last_retrieval_contexts", []),
                             },
                         ).to_dict()
                         group_rows.append(record)
@@ -400,7 +395,7 @@ class Stage1DataFactory:
                         next_seed_index=seed_idx,
                         max_seed_problems=max_seed_problems,
                         template_counter=template_counter,
-                        teacher_model=self.teacher_generator.client.config.model,
+                        teacher_model=teacher_model_name(self.teacher_generator),
                         interrupted=False,
                         completed=accepted_counter >= target_verified,
                     )
@@ -417,7 +412,7 @@ class Stage1DataFactory:
                     next_seed_index=current_next_seed_index,
                     max_seed_problems=max_seed_problems,
                     template_counter=template_counter,
-                    teacher_model=self.teacher_generator.client.config.model,
+                    teacher_model=teacher_model_name(self.teacher_generator),
                     interrupted=False,
                     completed=accepted_counter >= target_verified,
                 )
@@ -438,7 +433,7 @@ class Stage1DataFactory:
                 next_seed_index=current_next_seed_index,
                 max_seed_problems=max_seed_problems,
                 template_counter=template_counter,
-                teacher_model=self.teacher_generator.client.config.model,
+                teacher_model=teacher_model_name(self.teacher_generator),
                 interrupted=interrupted,
                 completed=accepted_counter >= target_verified,
             )
@@ -448,7 +443,7 @@ class Stage1DataFactory:
                 write_jsonl(output_dir / f"{split}.jsonl", rows)
 
             summary = {
-                "generator_backend": "zhipu_teacher",
+                "generator_backend": teacher_backend_name(self.teacher_generator),
                 "target_verified_samples": target_verified,
                 "accepted_samples": sum(len(rows) for rows in records_by_split.values()),
                 "verification_rate": round(accepted_counter / attempted_trajectories, 4) if attempted_trajectories else 0.0,
@@ -460,13 +455,13 @@ class Stage1DataFactory:
                 "question_variants_per_seed": int(self.config.get("question_variants_per_seed", 2)),
                 "template_distribution": dict(template_counter),
                 "splits": {split: len(rows) for split, rows in records_by_split.items()},
-                "teacher_model": self.teacher_generator.client.config.model,
+                "teacher_model": teacher_model_name(self.teacher_generator),
                 "resume_from_checkpoint": resume_from_checkpoint,
                 "pending_records_file": str(pending_path),
                 "state_file": str(state_path),
                 "interrupted": interrupted,
                 "completed": accepted_counter >= target_verified,
-                "recommended_range_for_1p5b": "80-150 verified samples; default target 120",
+                "recommended_range_for_7b_rag": "Start with 80-150 verified samples on an 8GB GPU, then scale after feasible/optimal rates hold up.",
             }
             write_json(output_dir / "summary.json", summary)
 

@@ -1,19 +1,20 @@
-model_name_or_path: models/Qwen2.5-1.5B-Instruct
-sft_adapter_path: outputs/qwen2.5-1.5b-stage1-lora_runs/sft_train_20260414_224817/weights/final_adapter
-# Replace this with the timestamped DPO train set produced by:
-# steporlm-local prepare-dpo --config-path configs/stage1_dpo_data.yaml
-dataset_path: runs/dpo_data_20260415_180054/train.jsonl
-output_dir: outputs/qwen2.5-1.5b-stage1-dpo
-max_prompt_length: 512
-max_response_length: 768
-learning_rate: 5.0e-5
+model_name_or_path: models/Qwen2.5-7B-Instruct
+sft_adapter_path: outputs/qwen2.5-7b-stage1-lora
+dataset_path: runs/dpo_data_7b/train.jsonl
+output_dir: outputs/qwen2.5-7b-stage1-dpo
+run_prefix: dpo_train_7b
+
+max_prompt_length: 768
+max_response_length: 1024
+learning_rate: 3.0e-5
 num_train_epochs: 2
 per_device_train_batch_size: 1
-gradient_accumulation_steps: 4
-logging_steps: 2
-save_steps: 5
-beta: 0.1
-load_in_4bit: false
+gradient_accumulation_steps: 8
+logging_steps: 5
+save_steps: 20
+beta: 0.2
+
+load_in_4bit: true
 use_bf16_if_available: true
 ref_model_on_cpu: true
 lora_r: 16

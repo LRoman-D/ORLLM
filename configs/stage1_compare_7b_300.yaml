@@ -3,6 +3,12 @@ run_prefix: model_compare_7b_300
 teacher_evaluation: false
 
 benchmark:
+  teacher_backend: qwen_rag
+  teacher_model_path: models/Qwen2.5-7B-Instruct
+  teacher_load_in_4bit: true
+  rag_index_dir: data/rag/or_books
+  rag_top_k: 4
+  rag_max_context_chars: 5000
   seed: 2026
   target_questions: 300
   max_seed_problems: 300
@@ -33,15 +39,15 @@ rollout:
 
 models:
   - name: base
-    model_path: models/Qwen/Qwen2.5-7B-Instruct
+    model_path: models/Qwen2.5-7B-Instruct
     is_adapter: false
 
   - name: sft
     model_path: outputs/qwen2.5-7b-stage1-lora
-    base_model_path: models/Qwen/Qwen2.5-7B-Instruct
+    base_model_path: models/Qwen2.5-7B-Instruct
     is_adapter: true
 
   - name: dpo
     model_path: outputs/qwen2.5-7b-stage1-dpo
-    base_model_path: models/Qwen/Qwen2.5-7B-Instruct
+    base_model_path: models/Qwen2.5-7B-Instruct
     is_adapter: true

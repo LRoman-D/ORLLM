@@ -16,6 +16,35 @@ def generate_dataset(config_path: str = "configs/stage1_data.yaml") -> None:
     typer.echo(summary)
 
 
+@app.command("build-rag-index")
+def build_rag_index_cmd(config_path: str = "configs/rag_index.yaml") -> None:
+    from steporlm_stage1.rag.index import build_rag_index
+    from steporlm_stage1.utils.io import load_yaml_config
+
+    config = load_yaml_config(config_path)
+    summary = build_rag_index(**config)
+    typer.echo(summary)
+
+
+@app.command("evaluate-rag")
+def evaluate_rag_cmd(config_path: str = "configs/rag_eval.yaml") -> None:
+    from steporlm_stage1.rag.evaluation import evaluate_rag_retrieval
+
+    summary = evaluate_rag_retrieval(config_path)
+    typer.echo(summary)
+
+
+@app.command("summarize-sft-quality")
+def summarize_sft_quality_cmd(
+    dataset_dir: str = "data/processed/stage1_dataset",
+    output_path: str | None = None,
+) -> None:
+    from steporlm_stage1.rag.evaluation import summarize_sft_quality
+
+    summary = summarize_sft_quality(dataset_dir, output_path)
+    typer.echo(summary)
+
+
 @app.command("prepare-sft")
 def prepare_sft(
     input_dir: str = "data/processed/stage1_dataset",
