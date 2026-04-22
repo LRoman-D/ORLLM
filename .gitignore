@@ -51,8 +51,6 @@ data/*
 models/*
 !models/.gitkeep
 !models/README.md
-referencebooks/*
-!referencebooks/.gitkeep
 *.bin
 !outputs/qwen2.5-7b-stage1-lora/training_args.bin
 !outputs/qwen2.5-7b-stage1-lora_runs/sft_train_20260421_004434/weights/final_adapter/training_args.bin
