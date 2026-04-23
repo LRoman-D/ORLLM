@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import random
 
-from ortools.linear_solver import pywraplp
-
 from steporlm_stage1.schemas import ReferenceSolution
+from steporlm_stage1.solvers.ortools_api import create_linear_solver, linear_status_name
 from steporlm_stage1.templates.base import ProblemTemplate
 
 
@@ -50,9 +49,7 @@ class AssignmentTemplate(ProblemTemplate):
         )
 
     def solve_reference(self, instance: dict) -> ReferenceSolution:
-        solver = pywraplp.Solver.CreateSolver("CBC_MIXED_INTEGER_PROGRAMMING")
-        if solver is None:
-            raise RuntimeError("Failed to create CBC solver.")
+        solver = create_linear_solver(has_integer=True)
         x = {
             (worker, task): solver.BoolVar(f"x_{w_idx}_{t_idx}")
             for w_idx, worker in enumerate(instance["workers"])
@@ -66,7 +63,7 @@ class AssignmentTemplate(ProblemTemplate):
             sum(instance["costs"][worker][task] * x[(worker, task)] for worker in instance["workers"] for task in instance["tasks"])
         )
         status = solver.Solve()
-        status_name = "OPTIMAL" if status == pywraplp.Solver.OPTIMAL else "FAILED"
+        status_name = linear_status_name(status)
         assignment = {}
         if status_name == "OPTIMAL":
             for worker in instance["workers"]:

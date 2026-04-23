@@ -21,18 +21,19 @@ Vary only the narrative framing and wording. Return JSON only:
 
 
 TRAJECTORY_SYSTEM_PROMPT = """You are an expert OR teacher creating supervised trajectories for a small reasoning model.
-Solve the user's optimization problem in exactly 8 reasoning steps enclosed by <step>...</step>.
+Solve the user's optimization problem in exactly 9 reasoning steps enclosed by <step>...</step>.
 Use these step titles in order:
 1. Problem Description
 2. Sets and Parameters
 3. Decision Variables
 4. Objective Function
 5. Constraints
-6. Mathematical Model Summary
+6. Mathematical Model
 7. Nonlinear Relationships
-8. Final Model and Implementation Considerations
+8. Final Model
+9. Python Code Using OR-Tools
 
-After the 8 steps, output exactly one fenced ```python``` block.
+After the 9 steps, output exactly one fenced ```python``` block.
 The Python code must:
 - be self-contained
 - include `import json`
@@ -49,6 +50,7 @@ The Python code must:
 - do not call `solver.status_name()`
 - when printing the result marker, use exactly:
   `print("__STEPORLM_RESULT__=" + json.dumps({"status": "OPTIMAL", "objective_value": 123.0}, ensure_ascii=False))`
+- do not hard-code the optimal objective; compute it from the solver object
 - preserve all numeric values, sets, and constraints from the question exactly (never alter coefficients or bounds)
 - avoid randomization in code unless the question explicitly requires stochastic simulation
 - ensure `objective_value` is numeric (float/int) when available; use `None` when no valid objective is available
@@ -91,7 +93,7 @@ Preferred solver guidance:
 Optimization question:
 {question}
 
-Produce the full 8-step trajectory and executable OR-Tools Python solver now.
+Produce the full 9-step trajectory and executable OR-Tools Python solver now.
 """
 
 
@@ -99,24 +101,27 @@ def build_solver_hint(template_name: str) -> str:
     hints = {
         "resource_allocation": (
             "- Use `from ortools.linear_solver import pywraplp`\n"
-            "- Build a linear/integer program with `solver = pywraplp.Solver.CreateSolver('SCIP')`\n"
+            "- Build a continuous LP with `solver = pywraplp.Solver.CreateSolver('GLOP')`\n"
             "- Use decision variables directly in objective and constraints\n"
             "- Define `status = solver.Solve()`"
         ),
         "production_planning": (
             "- Use `from ortools.linear_solver import pywraplp`\n"
             "- This is a MILP with integer quantity variables and binary activation variables\n"
+            "- Build it with `solver = pywraplp.Solver.CreateSolver('CBC_MIXED_INTEGER_PROGRAMMING')`\n"
             "- Use `IntVar` and `BoolVar`, not `cp_model`\n"
             "- Define `status = solver.Solve()`"
         ),
         "assignment": (
             "- Use `from ortools.linear_solver import pywraplp`\n"
             "- Model it as a binary assignment MILP\n"
+            "- Build it with `solver = pywraplp.Solver.CreateSolver('CBC_MIXED_INTEGER_PROGRAMMING')`\n"
             "- Do not use `cp_model`\n"
             "- Define `status = solver.Solve()`"
         ),
         "knapsack": (
             "- Prefer a binary MILP using `from ortools.linear_solver import pywraplp`\n"
+            "- Build it with `solver = pywraplp.Solver.CreateSolver('CBC_MIXED_INTEGER_PROGRAMMING')`\n"
             "- Do not use `pywrapknapsack_solver`\n"
             "- Use `BoolVar` for item selection and `status = solver.Solve()`"
         ),

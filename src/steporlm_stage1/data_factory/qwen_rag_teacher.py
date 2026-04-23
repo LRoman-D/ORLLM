@@ -13,6 +13,8 @@ from steporlm_stage1.data_factory.zhipu_teacher import (
     build_question_rewrite_prompt,
     build_solver_hint,
 )
+from steporlm_stage1.prompts import ORTOOLS_STYLE_GUIDE
+from steporlm_stage1.quality.genprm import GENPRM_SYSTEM_PROMPT, build_genprm_prompt, parse_genprm_output
 from steporlm_stage1.rag.index import HybridRagRetriever
 from steporlm_stage1.utils.modeling import load_causal_lm, load_tokenizer
 
@@ -26,6 +28,29 @@ RAG_TRAJECTORY_SYSTEM_PROMPT = (
 
 class QwenRagTeacherGenerator:
     backend_name = "qwen_rag_teacher"
+    _TSP_REQUIRED_TERMS = (
+        "traveling salesman",
+        "travelling salesman",
+        "tsp",
+        "tour",
+        "route",
+        "routing",
+        "distance matrix",
+        "city",
+    )
+    _TSP_BANNED_TERMS = (
+        "subtour elimination inequalities",
+        "cut-set inequality",
+        "facet",
+        "polytope",
+        "stsp",
+        "held-karp",
+        "branch-and-cut",
+        "miller-tucker-zemlin",
+        "mtz",
+        "x_ij",
+        "xij",
+    )
 
     def __init__(
         self,
@@ -49,6 +74,12 @@ class QwenRagTeacherGenerator:
         trajectory_top_p: float = 0.9,
         trajectory_repetition_penalty: float = 1.0,
         use_bf16_if_available: bool = True,
+        enable_thinking: bool = False,
+        template_constraints_enabled: bool = True,
+        tsp_filtered_top_k: int = 2,
+        tsp_min_alpha_token_ratio: float = 0.52,
+        tsp_max_digit_token_ratio: float = 0.36,
+        tsp_require_keyword_match: bool = True,
     ) -> None:
         self.model_path = str(model_path)
         self.model_name = str(model_path)
@@ -60,6 +91,12 @@ class QwenRagTeacherGenerator:
         self.candidate_top_k = candidate_top_k
         self.trajectory_top_p = float(trajectory_top_p)
         self.trajectory_repetition_penalty = float(trajectory_repetition_penalty)
+        self.enable_thinking = bool(enable_thinking)
+        self.template_constraints_enabled = bool(template_constraints_enabled)
+        self.tsp_filtered_top_k = max(1, int(tsp_filtered_top_k))
+        self.tsp_min_alpha_token_ratio = max(0.1, min(0.9, float(tsp_min_alpha_token_ratio)))
+        self.tsp_max_digit_token_ratio = max(0.05, min(0.95, float(tsp_max_digit_token_ratio)))
+        self.tsp_require_keyword_match = bool(tsp_require_keyword_match)
         self.retriever = HybridRagRetriever(
             rag_index_dir,
             use_semantic_rerank=use_semantic_rerank,
@@ -102,6 +139,12 @@ class QwenRagTeacherGenerator:
             trajectory_top_p=float(config.get("trajectory_top_p", 0.9)),
             trajectory_repetition_penalty=float(config.get("trajectory_repetition_penalty", 1.0)),
             use_bf16_if_available=bool(config.get("use_bf16_if_available", True)),
+            enable_thinking=bool(config.get("teacher_enable_thinking", config.get("qwen_enable_thinking", False))),
+            template_constraints_enabled=bool(config.get("rag_template_constraints_enabled", True)),
+            tsp_filtered_top_k=int(config.get("rag_tsp_filtered_top_k", 2)),
+            tsp_min_alpha_token_ratio=float(config.get("rag_tsp_min_alpha_token_ratio", 0.52)),
+            tsp_max_digit_token_ratio=float(config.get("rag_tsp_max_digit_token_ratio", 0.36)),
+            tsp_require_keyword_match=bool(config.get("rag_tsp_require_keyword_match", True)),
         )
 
     def rewrite_question_variants(
@@ -114,7 +157,10 @@ class QwenRagTeacherGenerator:
         temperature: float = 0.6,
         max_tokens: int = 1200,
     ) -> list[str]:
-        context = self._retrieve_context(f"{template_name} operations research modeling question variants")
+        context = self._retrieve_context(
+            f"{template_name} operations research modeling question variants",
+            template_name=template_name,
+        )
         user_prompt = (
             build_question_rewrite_prompt(template_name, canonical_question, instance, num_variants, rewrite_styles)
             + "\n\nReference excerpts for more varied but valid wording:\n"
@@ -146,7 +192,7 @@ class QwenRagTeacherGenerator:
         temperatures: list[float],
         max_tokens: int = 2000,
     ) -> list[str]:
-        context = self._retrieve_context(f"{template_name}\n{question}")
+        context = self._retrieve_context(f"{template_name}\n{question}", template_name=template_name)
         user_prompt = self._build_rag_trajectory_prompt(question=question, template_name=template_name, context=context)
         trajectories = []
         for temperature in temperatures:
@@ -165,13 +211,49 @@ class QwenRagTeacherGenerator:
                 trajectories.append(cleaned)
         return trajectories
 
-    def _retrieve_context(self, query: str) -> str:
+    def audit_trajectory(
+        self,
+        *,
+        question: str,
+        response: str,
+        verification: dict[str, Any],
+        template_name: str | None = None,
+        max_tokens: int = 4200,
+    ) -> dict[str, Any]:
+        context = self._retrieve_context(
+            f"GenPRM audit OR modeling semantics {template_name or ''}\n{question}",
+            template_name=template_name,
+        )
+        prompt = build_genprm_prompt(
+            question=question,
+            trajectory=response,
+            verification=verification,
+            template_name=template_name,
+            reference_context=context,
+        )
+        content = self._chat(
+            [
+                {"role": "system", "content": GENPRM_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.0,
+            max_new_tokens=max_tokens,
+            top_p=1.0,
+            repetition_penalty=1.0,
+        )
+        return parse_genprm_output(content, model=self.model_name).to_dict()
+
+    def _retrieve_context(self, query: str, *, template_name: str | None = None) -> str:
         results = self.retriever.search(
             query,
             candidate_top_k=self.candidate_top_k,
             top_k=self.top_k,
         )
         results = self._apply_modeling_boost(results)
+        results = self._apply_template_retrieval_constraints(template_name, results)
+        if not results:
+            self.last_retrieval_contexts = []
+            return "No trusted reference snippets passed template-aware filtering. Solve from the question and solver guidance only."
         self.last_retrieval_contexts = [
             {
                 "chunk_id": item.get("chunk_id"),
@@ -191,6 +273,48 @@ class QwenRagTeacherGenerator:
             include_scores=self.context_include_scores,
             include_chunk_id=True,
         )
+
+    def _apply_template_retrieval_constraints(self, template_name: str | None, results: list[dict]) -> list[dict]:
+        if not results:
+            return results
+        if not self.template_constraints_enabled or not template_name:
+            return results
+        if str(template_name).strip().lower() != "tsp":
+            return results
+
+        filtered: list[dict] = []
+        for row in results:
+            text = str(row.get("text", ""))
+            lowered = text.lower()
+            if self.tsp_require_keyword_match and not any(term in lowered for term in self._TSP_REQUIRED_TERMS):
+                continue
+            if any(term in lowered for term in self._TSP_BANNED_TERMS):
+                continue
+            if self._is_low_quality_tsp_chunk(text):
+                continue
+            filtered.append(row)
+
+        if not filtered:
+            return []
+        limit = min(max(1, self.top_k), self.tsp_filtered_top_k)
+        return filtered[:limit]
+
+    def _is_low_quality_tsp_chunk(self, text: str) -> bool:
+        # Heuristic: reject OCR table-like chunks with heavy numeric density.
+        alpha_tokens = re.findall(r"[A-Za-z]+", text)
+        digit_tokens = re.findall(r"\d+(?:\.\d+)?", text)
+        total = len(alpha_tokens) + len(digit_tokens)
+        if total <= 0:
+            return True
+        alpha_ratio = len(alpha_tokens) / total
+        digit_ratio = len(digit_tokens) / total
+        if alpha_ratio < self.tsp_min_alpha_token_ratio:
+            return True
+        if digit_ratio > self.tsp_max_digit_token_ratio:
+            return True
+        if re.search(r"\{\s*\d+(?:\s+\d+){4,}\s*\}", text):
+            return True
+        return False
 
     def _apply_modeling_boost(self, results: list[dict]) -> list[dict]:
         if not results or self.modeling_boost <= 0:
@@ -223,6 +347,17 @@ class QwenRagTeacherGenerator:
     @staticmethod
     def _build_rag_trajectory_prompt(question: str, template_name: str, context: str) -> str:
         solver_hint = build_solver_hint(template_name)
+        tsp_api_guard = ""
+        if str(template_name).strip().lower() == "tsp":
+            tsp_api_guard = """
+- TSP代码稳定性约束（必须遵守）：
+  * 仅使用这些 OR-Tools Routing API：RoutingIndexManager, RoutingModel, RegisterTransitCallback, SetArcCostEvaluatorOfAllVehicles, DefaultRoutingSearchParameters, SolveWithParameters, NextVar, IsEnd, ObjectiveValue
+  * 禁止调用不存在或未文档化的方法（例如 AddDimensionWithZeroToAllTransitsAndUIConstraint、GetRouteForVehicle）
+  * 提取路径时必须写成 `next_index = solution.Value(routing.NextVar(index))`，禁止写 `solution.NextVar()` 或 `solution.NextVar().Value()`
+  * 禁止硬编码目标值，必须使用 `solution.ObjectiveValue()` 读取
+  * 你必须显式构造并打印 `result = {"status": "...", "objective_value": ...}`；不要依赖外部辅助函数推断状态
+  * 若 `solution is None`，输出 status=`INFEASIBLE` 且 objective_value=`None`
+"""
         return f"""Template family: {template_name}
 Preferred solver guidance:
 {solver_hint}
@@ -241,9 +376,12 @@ Preferred solver guidance:
 - 代码必须包含 import json，并输出唯一结果标记：__STEPORLM_RESULT__=
 - 严禁改动题目中的任何数字、上/下界、容量、成本、需求等参数
 - 参考资料仅用于建模启发，不要照抄其中变量名/索引集合；以当前题目定义为准
-- 仅输出一个完整 Python 代码块，不要输出额外解释
+- 必须输出 9 个 `<step>...</step>` 推理步骤，最后仅输出一个完整 Python 代码块
+- 代码必须遵守以下 OR-Tools 规范：
+{ORTOOLS_STYLE_GUIDE}
+{tsp_api_guard}
 
-Produce the full 8-step trajectory and executable OR-Tools Python solver now.
+Produce the full 9-step trajectory and executable OR-Tools Python solver now.
 """
 
     def _chat(
@@ -255,7 +393,15 @@ Produce the full 8-step trajectory and executable OR-Tools Python solver now.
         top_p: float = 0.9,
         repetition_penalty: float = 1.0,
     ) -> str:
-        prompt_text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        try:
+            prompt_text = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+                enable_thinking=self.enable_thinking,
+            )
+        except TypeError:
+            prompt_text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         inputs = self.tokenizer(prompt_text, return_tensors="pt")
         if torch.cuda.is_available():
             inputs = {key: value.to(self.model.device) for key, value in inputs.items()}

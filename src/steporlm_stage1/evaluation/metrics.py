@@ -12,6 +12,8 @@ def summarize_best_trajectories(rows: list[dict]) -> tuple[list[dict], dict[str,
     pass_rates = []
     objective_gaps = []
     teacher_scores = []
+    process_scores = []
+    process_passes = []
 
     for row in rows:
         ranked = sorted(row["trajectories"], key=rank_key, reverse=True)
@@ -30,6 +32,12 @@ def summarize_best_trajectories(rows: list[dict]) -> tuple[list[dict], dict[str,
             teacher_scores.append(score)
         except (KeyError, TypeError, ValueError):
             score = None
+        process = best.get("process_verification") or {}
+        try:
+            process_scores.append(float(process.get("score", 0.0)))
+            process_passes.append(1.0 if int(process.get("correct_count", 0)) >= 8 else 0.0)
+        except (TypeError, ValueError):
+            pass
 
         predictions.append(
             {
@@ -40,6 +48,7 @@ def summarize_best_trajectories(rows: list[dict]) -> tuple[list[dict], dict[str,
                 "code": best["code"],
                 "verification": verification,
                 "teacher_evaluation": best.get("teacher_evaluation"),
+                "process_verification": best.get("process_verification"),
                 "objective_gap": objective_gap,
                 "source": best["source"],
             }
@@ -56,5 +65,7 @@ def summarize_best_trajectories(rows: list[dict]) -> tuple[list[dict], dict[str,
         "mean_abs_objective_gap": round(sum(objective_gaps) / len(objective_gaps), 4) if objective_gaps else 0.0,
         "teacher_mean_score": round(sum(teacher_scores) / len(teacher_scores), 4) if teacher_scores else 0.0,
         "teacher_var_score": round(pvariance(teacher_scores), 6) if len(teacher_scores) > 1 else 0.0,
+        "genprm_mean_score": round(sum(process_scores) / len(process_scores), 4) if process_scores else 0.0,
+        "genprm_pass_rate": round(sum(process_passes) / len(process_passes), 4) if process_passes else 0.0,
     }
     return predictions, metrics, teacher_scores

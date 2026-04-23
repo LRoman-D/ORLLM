@@ -2,7 +2,7 @@ index_dir: data/rag/or_books
 candidate_top_k: 25
 top_k: 5
 use_semantic_rerank: true
-reranker_model: BAAI/bge-reranker-base
+reranker_model: models/msmarco-minilm-reranker
 reranker_batch_size: 8
 reranker_max_length: 512
 use_query_rewrite: false

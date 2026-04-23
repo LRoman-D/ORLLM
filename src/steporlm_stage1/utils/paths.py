@@ -26,7 +26,7 @@ class ProjectPaths:
 
     @property
     def run_root(self) -> Path:
-        return self.output_dir / "runs"
+        return self.project_root / "runs"
 
     @property
     def checkpoint_root(self) -> Path:
@@ -41,7 +41,7 @@ DEFAULT_PATHS = ProjectPaths(
     project_root=PROJECT_ROOT,
     data_dir=_env_path("PROJECT_DATA_DIR", PROJECT_ROOT / "data"),
     model_dir=_env_path("PROJECT_MODEL_DIR", PROJECT_ROOT / "models"),
-    output_dir=_env_path("PROJECT_OUTPUT_DIR", PROJECT_ROOT / "outputs"),
+    output_dir=_env_path("PROJECT_ARTIFACT_DIR", _env_path("PROJECT_OUTPUT_DIR", PROJECT_ROOT / "artifacts")),
     log_dir=_env_path("PROJECT_LOG_DIR", PROJECT_ROOT / "logs"),
     cache_dir=_env_path("PROJECT_CACHE_DIR", PROJECT_ROOT / ".cache"),
 )
@@ -50,6 +50,7 @@ DEFAULT_PATHS = ProjectPaths(
 PATH_ALIAS_PREFIXES = {
     "data": lambda paths: paths.data_dir,
     "models": lambda paths: paths.model_dir,
+    "artifacts": lambda paths: paths.output_dir,
     "outputs": lambda paths: paths.output_dir,
     "runs": lambda paths: paths.run_root,
     "logs": lambda paths: paths.log_dir,
@@ -84,6 +85,7 @@ def project_env_exports(paths: ProjectPaths | None = None) -> dict[str, str]:
         "PROJECT_ROOT": str(current_paths.project_root),
         "PROJECT_DATA_DIR": str(current_paths.data_dir),
         "PROJECT_MODEL_DIR": str(current_paths.model_dir),
+        "PROJECT_ARTIFACT_DIR": str(current_paths.output_dir),
         "PROJECT_OUTPUT_DIR": str(current_paths.output_dir),
         "PROJECT_LOG_DIR": str(current_paths.log_dir),
         "PROJECT_CACHE_DIR": str(current_paths.cache_dir),

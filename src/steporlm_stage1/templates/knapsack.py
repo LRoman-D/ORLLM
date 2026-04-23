@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import random
 
-from ortools.linear_solver import pywraplp
-
 from steporlm_stage1.schemas import ReferenceSolution
+from steporlm_stage1.solvers.ortools_api import create_linear_solver, linear_status_name
 from steporlm_stage1.templates.base import ProblemTemplate
 
 
@@ -54,14 +53,12 @@ class KnapsackTemplate(ProblemTemplate):
         )
 
     def solve_reference(self, instance: dict) -> ReferenceSolution:
-        solver = pywraplp.Solver.CreateSolver("CBC_MIXED_INTEGER_PROGRAMMING")
-        if solver is None:
-            raise RuntimeError("Failed to create CBC solver.")
+        solver = create_linear_solver(has_integer=True)
         x = {item: solver.BoolVar(f"x_{idx}") for idx, item in enumerate(instance["items"])}
         solver.Add(sum(instance["weights"][item] * x[item] for item in instance["items"]) <= instance["capacity"])
         solver.Maximize(sum(instance["values"][item] * x[item] for item in instance["items"]))
         status = solver.Solve()
-        status_name = "OPTIMAL" if status == pywraplp.Solver.OPTIMAL else "FAILED"
+        status_name = linear_status_name(status)
         chosen_items = [item for item in instance["items"] if x[item].solution_value() > 0.5] if status_name == "OPTIMAL" else []
         return ReferenceSolution(
             status=status_name,

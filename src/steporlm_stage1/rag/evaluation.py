@@ -99,7 +99,7 @@ def evaluate_rag_retrieval(config_path: str | Path = "configs/rag_eval.yaml") ->
     return summary
 
 
-def summarize_sft_quality(dataset_dir: str | Path = "data/processed/stage1_dataset", output_path: str | Path | None = None) -> dict:
+def summarize_sft_quality(dataset_dir: str | Path = "data/processed/qwen3_rag_teacher", output_path: str | Path | None = None) -> dict:
     root = Path(dataset_dir)
     dataset_rows = []
     for split in ["train", "valid", "test"]:

@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import random
 
-from ortools.linear_solver import pywraplp
-
 from steporlm_stage1.schemas import ReferenceSolution
+from steporlm_stage1.solvers.ortools_api import create_linear_solver, linear_status_name
 from steporlm_stage1.templates.base import ProblemTemplate
 
 
@@ -65,9 +64,7 @@ class ResourceAllocationTemplate(ProblemTemplate):
         )
 
     def solve_reference(self, instance: dict) -> ReferenceSolution:
-        solver = pywraplp.Solver.CreateSolver("GLOP")
-        if solver is None:
-            raise RuntimeError("Failed to create GLOP solver.")
+        solver = create_linear_solver(has_integer=False)
         variables = {product: solver.NumVar(0.0, solver.infinity(), f"x_{idx}") for idx, product in enumerate(instance["products"])}
         for resource in instance["resources"]:
             solver.Add(
@@ -76,7 +73,7 @@ class ResourceAllocationTemplate(ProblemTemplate):
             )
         solver.Maximize(sum(instance["profits"][product] * variables[product] for product in instance["products"]))
         status = solver.Solve()
-        status_name = "OPTIMAL" if status == pywraplp.Solver.OPTIMAL else "FAILED"
+        status_name = linear_status_name(status)
         return ReferenceSolution(
             status=status_name,
             objective_value=solver.Objective().Value() if status_name == "OPTIMAL" else None,

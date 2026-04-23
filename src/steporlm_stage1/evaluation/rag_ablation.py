@@ -140,9 +140,21 @@ def run_rag_ablation(config_path: str | Path) -> dict[str, Any]:
         reranker_model_name_or_path=str(benchmark_config.get("rag_reranker_model", "BAAI/bge-reranker-base")),
         reranker_batch_size=int(benchmark_config.get("rag_reranker_batch_size", 8)),
         reranker_max_length=int(benchmark_config.get("rag_reranker_max_length", 512)),
+        rerank_keyword_blend=float(benchmark_config.get("rag_rerank_keyword_blend", 0.75)),
         use_query_rewrite=bool(benchmark_config.get("rag_use_query_rewrite", False)),
         fail_on_reranker_error=bool(benchmark_config.get("rag_fail_on_reranker_error", False)),
+        context_max_chunk_chars=int(benchmark_config.get("rag_context_max_chunk_chars", 1200)),
+        context_include_scores=bool(benchmark_config.get("rag_context_include_scores", False)),
+        modeling_boost=float(benchmark_config.get("rag_modeling_boost", 0.08)),
+        template_constraints_enabled=bool(benchmark_config.get("rag_template_constraints_enabled", True)),
+        tsp_filtered_top_k=int(benchmark_config.get("rag_tsp_filtered_top_k", 2)),
+        tsp_min_alpha_token_ratio=float(benchmark_config.get("rag_tsp_min_alpha_token_ratio", 0.52)),
+        tsp_max_digit_token_ratio=float(benchmark_config.get("rag_tsp_max_digit_token_ratio", 0.36)),
+        tsp_require_keyword_match=bool(benchmark_config.get("rag_tsp_require_keyword_match", True)),
+        trajectory_top_p=float(benchmark_config.get("trajectory_top_p", 0.9)),
+        trajectory_repetition_penalty=float(benchmark_config.get("trajectory_repetition_penalty", 1.0)),
         use_bf16_if_available=bool(benchmark_config.get("use_bf16_if_available", True)),
+        enable_thinking=bool(benchmark_config.get("teacher_enable_thinking", benchmark_config.get("qwen_enable_thinking", False))),
     )
     executor = PythonCodeExecutor(timeout_seconds=int(rollout_config.get("timeout_seconds", 20)))
     temperatures = _build_temperatures(rollout_config)

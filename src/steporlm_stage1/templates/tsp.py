@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import random
 
-from ortools.linear_solver import pywraplp
-
 from steporlm_stage1.schemas import ReferenceSolution
+from steporlm_stage1.solvers.ortools_api import create_linear_solver, linear_status_name
 from steporlm_stage1.templates.base import ProblemTemplate
 
 
@@ -60,9 +59,7 @@ class TSPTemplate(ProblemTemplate):
     def solve_reference(self, instance: dict) -> ReferenceSolution:
         cities = instance["cities"]
         n = len(cities)
-        solver = pywraplp.Solver.CreateSolver("CBC_MIXED_INTEGER_PROGRAMMING")
-        if solver is None:
-            raise RuntimeError("Failed to create CBC solver.")
+        solver = create_linear_solver(has_integer=True)
         x = {(i, j): solver.BoolVar(f"x_{i}_{j}") for i in range(n) for j in range(n) if i != j}
         u = {i: solver.NumVar(0.0, n - 1, f"u_{i}") for i in range(1, n)}
         for i in range(n):
@@ -76,7 +73,7 @@ class TSPTemplate(ProblemTemplate):
             sum(instance["distances"][cities[i]][cities[j]] * x[(i, j)] for i in range(n) for j in range(n) if i != j)
         )
         status = solver.Solve()
-        status_name = "OPTIMAL" if status == pywraplp.Solver.OPTIMAL else "FAILED"
+        status_name = linear_status_name(status)
         return ReferenceSolution(
             status=status_name,
             objective_value=solver.Objective().Value() if status_name == "OPTIMAL" else None,

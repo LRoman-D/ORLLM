@@ -31,6 +31,21 @@ class VerificationResult:
 
 
 @dataclass
+class ProcessVerification:
+    score: float
+    correct_count: int
+    total_steps: int
+    all_correct: bool
+    step_correct: list[bool]
+    explanations: list[str] = field(default_factory=list)
+    model: str = "unknown"
+    raw_output: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class DatasetRecord:
     problem_id: str
     split: str
@@ -41,6 +56,7 @@ class DatasetRecord:
     instance: dict[str, Any]
     reference_solution: dict[str, Any]
     verification: dict[str, Any]
+    process_verification: dict[str, Any] = field(default_factory=dict)
     generation_notes: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -55,6 +71,7 @@ class PreferenceTrajectory:
     verification: dict[str, Any]
     process_score: float
     source: str
+    process_verification: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

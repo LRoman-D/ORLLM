@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import random
 
-from ortools.linear_solver import pywraplp
-
 from steporlm_stage1.schemas import ReferenceSolution
+from steporlm_stage1.solvers.ortools_api import create_linear_solver, linear_status_name
 from steporlm_stage1.templates.base import ProblemTemplate
 
 
@@ -61,9 +60,7 @@ class ProductionPlanningTemplate(ProblemTemplate):
         )
 
     def solve_reference(self, instance: dict) -> ReferenceSolution:
-        solver = pywraplp.Solver.CreateSolver("CBC_MIXED_INTEGER_PROGRAMMING")
-        if solver is None:
-            raise RuntimeError("Failed to create CBC solver.")
+        solver = create_linear_solver(has_integer=True)
         x = {product: solver.IntVar(0, instance["max_units"][product], f"x_{idx}") for idx, product in enumerate(instance["products"])}
         y = {product: solver.BoolVar(f"y_{idx}") for idx, product in enumerate(instance["products"])}
         for product in instance["products"]:
@@ -71,7 +68,7 @@ class ProductionPlanningTemplate(ProblemTemplate):
         solver.Add(sum(instance["labor_hours"][p] * x[p] for p in instance["products"]) <= instance["total_hours"])
         solver.Maximize(sum(instance["margin"][p] * x[p] - instance["setup_cost"][p] * y[p] for p in instance["products"]))
         status = solver.Solve()
-        status_name = "OPTIMAL" if status == pywraplp.Solver.OPTIMAL else "FAILED"
+        status_name = linear_status_name(status)
         return ReferenceSolution(
             status=status_name,
             objective_value=solver.Objective().Value() if status_name == "OPTIMAL" else None,

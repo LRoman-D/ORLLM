@@ -2,17 +2,10 @@ from __future__ import annotations
 
 import re
 
+from steporlm_stage1.quality.genprm import GENPRM_STEP_TITLES
 
-STEP_TITLES = [
-    "Problem Description",
-    "Sets and Parameters",
-    "Decision Variables",
-    "Objective Function",
-    "Constraints",
-    "Mathematical Model Summary",
-    "Nonlinear Relationships",
-    "Final Model and Implementation Considerations",
-]
+
+STEP_TITLES = GENPRM_STEP_TITLES
 
 
 def extract_python_code(response_text: str) -> str:

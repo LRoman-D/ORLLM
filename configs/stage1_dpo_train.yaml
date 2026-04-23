@@ -1,17 +1,18 @@
-model_name_or_path: models/Qwen2.5-7B-Instruct
-sft_adapter_path: outputs/qwen2.5-7b-stage1-lora
-dataset_path: runs/dpo_data_7b/train.jsonl
-output_dir: outputs/qwen2.5-7b-stage1-dpo
-run_prefix: dpo_train_7b
+model_name_or_path: models/Qwen3-8B
+sft_adapter_path: artifacts/qwen3-8b/sft-lora
+dataset_path: data/processed/qwen3_dpo/train.jsonl
+output_dir: artifacts/qwen3-8b/dpo-lora
+run_root: runs
+run_prefix: dpo_qwen3_8b
 
-max_prompt_length: 768
-max_response_length: 1024
+max_prompt_length: 1024
+max_response_length: 1800
 learning_rate: 3.0e-5
 num_train_epochs: 2
 per_device_train_batch_size: 1
 gradient_accumulation_steps: 8
 logging_steps: 5
-save_steps: 20
+save_steps: 25
 beta: 0.2
 
 load_in_4bit: true
@@ -20,3 +21,4 @@ ref_model_on_cpu: true
 lora_r: 16
 lora_alpha: 32
 lora_dropout: 0.05
+

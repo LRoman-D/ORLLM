@@ -12,6 +12,7 @@ from tqdm import tqdm
 
 from steporlm_stage1.data_factory.teacher_factory import build_teacher_generator, teacher_backend_name, teacher_model_name
 from steporlm_stage1.executors.python_executor import PythonCodeExecutor
+from steporlm_stage1.quality.genprm import audit_passes_threshold
 from steporlm_stage1.schemas import DatasetRecord
 from steporlm_stage1.templates.registry import TEMPLATE_REGISTRY
 from steporlm_stage1.utils.io import ensure_dir, load_yaml_config, read_jsonl, write_json, write_jsonl
@@ -156,6 +157,8 @@ class Stage1DataFactory:
         max_seed_problems: int,
         template_counter: Counter[str],
         teacher_model: str,
+        genprm_attempted: int = 0,
+        genprm_rejected: int = 0,
         interrupted: bool,
         completed: bool,
     ) -> None:
@@ -173,6 +176,8 @@ class Stage1DataFactory:
                 "max_seed_problems": max_seed_problems,
                 "template_distribution": dict(template_counter),
                 "teacher_model": teacher_model,
+                "genprm_attempted": genprm_attempted,
+                "genprm_rejected": genprm_rejected,
                 "interrupted": interrupted,
                 "completed": completed,
                 "rng_state": repr(self.rng.getstate()),
@@ -191,6 +196,61 @@ class Stage1DataFactory:
                 row["split"] = split
             records_by_split[split].extend(group_rows)
         return records_by_split
+
+    def _genprm_enabled(self) -> bool:
+        return bool(self.config.get("genprm_evaluation", self.config.get("genprm_enabled", False)))
+
+    def _audit_candidate_process(
+        self,
+        *,
+        question: str,
+        response: str,
+        verification: dict[str, Any],
+        template_name: str,
+    ) -> dict[str, Any]:
+        if not self._genprm_enabled():
+            return {}
+        if self.teacher_generator is None or not hasattr(self.teacher_generator, "audit_trajectory"):
+            return {
+                "score": 0.0,
+                "correct_count": 0,
+                "total_steps": 9,
+                "all_correct": False,
+                "step_correct": [],
+                "explanations": ["Teacher backend does not implement audit_trajectory."],
+                "model": teacher_model_name(self.teacher_generator) if self.teacher_generator is not None else "unknown",
+                "raw_output": "",
+                "error": "audit_not_supported",
+            }
+        try:
+            return self.teacher_generator.audit_trajectory(
+                question=question,
+                response=response,
+                verification=verification,
+                template_name=template_name,
+                max_tokens=int(self.config.get("genprm_max_tokens", 4200)),
+            )
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "score": 0.0,
+                "correct_count": 0,
+                "total_steps": 9,
+                "all_correct": False,
+                "step_correct": [],
+                "explanations": [str(exc)],
+                "model": teacher_model_name(self.teacher_generator),
+                "raw_output": "",
+                "error": "audit_failed",
+            }
+
+    def _process_audit_passes(self, audit: dict[str, Any]) -> bool:
+        if not self._genprm_enabled():
+            return True
+        return audit_passes_threshold(
+            audit,
+            min_correct_steps=int(self.config.get("genprm_min_correct_steps", 8)),
+            require_all_correct=bool(self.config.get("genprm_require_all_correct", False)),
+        )
 
     def _generate_teacher_dataset(self) -> dict[str, int | float | dict | str]:
         if self.teacher_generator is None:
@@ -228,6 +288,8 @@ class Stage1DataFactory:
         accepted_counter = len(problem_ids)
         attempted_trajectories = int(state.get("attempted_trajectories", 0))
         api_request_errors = int(state.get("api_request_errors", 0))
+        genprm_attempted = int(state.get("genprm_attempted", 0))
+        genprm_rejected = int(state.get("genprm_rejected", 0))
         seed_problem_count = int(state.get("seed_problem_count", 0))
         variant_count = int(state.get("question_variant_count", 0))
         next_seed_index = int(state.get("next_seed_index", 0))
@@ -287,7 +349,7 @@ class Stage1DataFactory:
                         break
                     variant_count += 1
                     group_id = f"{template_name}-seed{seed_idx:04d}-q{variant_idx:02d}"
-                    group_rows: list[dict] = []
+                    group_success_count = 0
                     if self.config.get("verbose_generation", True):
                         tqdm.write(
                             f"  variant {variant_idx + 1}/{len(question_variants)}: sampling {len(temperatures)} trajectories"
@@ -309,6 +371,15 @@ class Stage1DataFactory:
                         attempted_trajectories += 1
                         code = extract_python_code(response)
                         verification = self.executor.verify(code, reference)
+                        process_verification: dict[str, Any] = {}
+                        if verification.success and self._genprm_enabled():
+                            genprm_attempted += 1
+                            process_verification = self._audit_candidate_process(
+                                question=question,
+                                response=response,
+                                verification=verification.to_dict(),
+                                template_name=template_name,
+                            )
                         self._append_jsonl(
                             trace_path,
                             [
@@ -321,6 +392,7 @@ class Stage1DataFactory:
                                     "response_preview": response[:1200],
                                     "code_preview": code[:1200],
                                     "verification": verification.to_dict(),
+                                    "process_verification": process_verification,
                                 }
                             ],
                         )
@@ -335,6 +407,15 @@ class Stage1DataFactory:
                                 tqdm.write(
                                     f"    traj {traj_idx + 1}/{len(responses)} rejected: "
                                     f"status={verification.status}, objective_match={verification.objective_match}"
+                                )
+                            continue
+                        if self._genprm_enabled() and not self._process_audit_passes(process_verification):
+                            genprm_rejected += 1
+                            if self.config.get("verbose_generation", True):
+                                tqdm.write(
+                                    f"    traj {traj_idx + 1}/{len(responses)} rejected by GenPRM: "
+                                    f"{process_verification.get('correct_count', 0)}/"
+                                    f"{process_verification.get('total_steps', 9)} correct steps"
                                 )
                             continue
 
@@ -352,6 +433,7 @@ class Stage1DataFactory:
                             instance=instance,
                             reference_solution=reference.to_dict(),
                             verification=verification.to_dict(),
+                            process_verification=process_verification,
                             generation_notes={
                                 "generator_backend": teacher_backend_name(self.teacher_generator),
                                 "teacher_model": teacher_model_name(self.teacher_generator),
@@ -362,8 +444,11 @@ class Stage1DataFactory:
                                 "rag_retrieval": getattr(self.teacher_generator, "last_retrieval_contexts", []),
                             },
                         ).to_dict()
-                        group_rows.append(record)
+                        groups_by_id.setdefault(group_id, []).append(record)
+                        self._append_jsonl(pending_path, [record])
+                        template_counter[template_name] += 1
                         problem_ids.add(problem_id)
+                        group_success_count += 1
                         accepted_counter += 1
                         progress.update(1)
                         progress.set_postfix(
@@ -377,11 +462,7 @@ class Stage1DataFactory:
                         if accepted_counter >= target_verified:
                             break
 
-                    if group_rows:
-                        groups_by_id.setdefault(group_id, []).extend(group_rows)
-                        template_counter[template_name] += len(group_rows)
-                        self._append_jsonl(pending_path, group_rows)
-                    elif self.config.get("verbose_generation", True):
+                    if group_success_count <= 0 and self.config.get("verbose_generation", True):
                         tqdm.write("  no verified trajectories accepted for this variant")
 
                     self._write_generation_state(
@@ -396,6 +477,8 @@ class Stage1DataFactory:
                         max_seed_problems=max_seed_problems,
                         template_counter=template_counter,
                         teacher_model=teacher_model_name(self.teacher_generator),
+                        genprm_attempted=genprm_attempted,
+                        genprm_rejected=genprm_rejected,
                         interrupted=False,
                         completed=accepted_counter >= target_verified,
                     )
@@ -413,6 +496,8 @@ class Stage1DataFactory:
                     max_seed_problems=max_seed_problems,
                     template_counter=template_counter,
                     teacher_model=teacher_model_name(self.teacher_generator),
+                    genprm_attempted=genprm_attempted,
+                    genprm_rejected=genprm_rejected,
                     interrupted=False,
                     completed=accepted_counter >= target_verified,
                 )
@@ -434,6 +519,8 @@ class Stage1DataFactory:
                 max_seed_problems=max_seed_problems,
                 template_counter=template_counter,
                 teacher_model=teacher_model_name(self.teacher_generator),
+                genprm_attempted=genprm_attempted,
+                genprm_rejected=genprm_rejected,
                 interrupted=interrupted,
                 completed=accepted_counter >= target_verified,
             )
@@ -451,6 +538,12 @@ class Stage1DataFactory:
                 "question_variant_count": variant_count,
                 "attempted_trajectories": attempted_trajectories,
                 "api_request_errors": api_request_errors,
+                "genprm_evaluation": self._genprm_enabled(),
+                "genprm_attempted": genprm_attempted,
+                "genprm_rejected": genprm_rejected,
+                "genprm_acceptance_rate": round((genprm_attempted - genprm_rejected) / genprm_attempted, 4)
+                if genprm_attempted
+                else 0.0,
                 "trajectories_per_variant": len(temperatures),
                 "question_variants_per_seed": int(self.config.get("question_variants_per_seed", 2)),
                 "template_distribution": dict(template_counter),

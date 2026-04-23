@@ -1,6 +1,8 @@
-# Replace this with the timestamped preference file produced by:
-# steporlm-local build-preferences --rollout-path ...
-preference_path: runs/preferences_7b/preferences.jsonl
-output_dir: runs/dpo_data_7b
+preference_path: runs/qwen3_8b/preferences/preferences.jsonl
+output_dir: data/processed/qwen3_dpo
 run_root: runs
-run_prefix: dpo_data
+run_prefix: dpo_data_qwen3_8b
+max_pairs: 0
+shuffle_before_limit: true
+sampling_seed: 2026
+

@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "steporlm-stage1"
+name = "orllm-qwen3-stage"
 version = "0.1.0"
-description = "Local stage-1 StepORLM scaffold for 4060 8GB."
+description = "Qwen3-8B OR modeling loop with RAG teacher, OR-Tools execution, GenPRM audit, SFT, and DPO."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Codex" }]
@@ -20,6 +20,7 @@ dependencies = [
     "torch>=2.3.0",
     "transformers>=4.44.0",
     "datasets>=2.20.0",
+    "huggingface_hub>=0.24.0",
     "accelerate>=0.33.0",
     "peft>=0.12.0",
     "trl>=0.10.1",

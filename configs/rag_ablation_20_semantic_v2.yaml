@@ -11,8 +11,9 @@ benchmark:
     knapsack: 1
     tsp: 1
 
-  teacher_model_path: models/Qwen2.5-7B-Instruct
-  teacher_load_in_4bit: false
+  teacher_model_path: models/Qwen3-8B
+  teacher_load_in_4bit: true
+  teacher_enable_thinking: false
   use_bf16_if_available: true
 
   rag_index_dir: data/rag/or_books

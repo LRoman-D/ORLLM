@@ -56,7 +56,19 @@ def _looks_like_local_path(value: str) -> bool:
         )
     ):
         return True
-    return value.split("/", 1)[0] in {"configs", "data", "models", "outputs", "reports", "runs", "tools", "logs", ".cache", "cache"}
+    return value.split("/", 1)[0] in {
+        "artifacts",
+        "configs",
+        "data",
+        "models",
+        "outputs",
+        "reports",
+        "runs",
+        "tools",
+        "logs",
+        ".cache",
+        "cache",
+    }
 
 
 def resolve_local_path(path: str | Path, base_dir: str | Path | None = None) -> str:

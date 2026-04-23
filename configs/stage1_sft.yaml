@@ -1,15 +1,29 @@
-model_name_or_path: models/Qwen2.5-7B-Instruct
-dataset_path: data/processed/stage1_sft/train.jsonl
-output_dir: outputs/qwen2.5-7b-stage1-lora
-max_seq_length: 1024
-learning_rate: 1.5e-4
-num_train_epochs: 1
+model_name_or_path: models/Qwen3-8B
+dataset_path: data/processed/qwen3_sft/train.jsonl
+output_dir: artifacts/qwen3-8b/sft-lora
+run_root: runs
+run_prefix: sft_qwen3_8b
+update_latest_symlink: true
+
+max_seq_length: 3072
+learning_rate: 1.0e-4
+num_train_epochs: 2
 per_device_train_batch_size: 1
-gradient_accumulation_steps: 4
-logging_steps: 10
-save_steps: 50
-lora_r: 16
-lora_alpha: 32
+gradient_accumulation_steps: 8
+logging_steps: 1
+save_steps: 25
+save_total_limit: 4
+lora_r: 32
+lora_alpha: 64
 lora_dropout: 0.05
 load_in_4bit: true
 use_bf16_if_available: true
+gradient_checkpointing: true
+gradient_checkpointing_kwargs:
+  use_reentrant: false
+optim: paged_adamw_8bit
+warmup_steps: 10
+lr_scheduler_type: cosine
+max_grad_norm: 0.3
+resume_from_checkpoint: true
+

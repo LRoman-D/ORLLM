@@ -7,10 +7,12 @@ from typing import Any
 import torch
 from tqdm import tqdm
 
+from steporlm_stage1.data_factory.teacher_factory import build_teacher_generator, teacher_model_name
 from steporlm_stage1.evaluators.teacher import ZhipuTeacherEvaluator
 from steporlm_stage1.executors.python_executor import PythonCodeExecutor
 from steporlm_stage1.preference.ranking import rank_key, teacher_score
 from steporlm_stage1.prompts import SYSTEM_PROMPT, build_rollout_user_prompt
+from steporlm_stage1.quality.genprm import audit_passes_threshold, process_score_from_audit
 from steporlm_stage1.schemas import PreferenceTrajectory, ReferenceSolution
 from steporlm_stage1.utils.io import ensure_dir, load_yaml_config, read_jsonl, write_json, write_jsonl
 from steporlm_stage1.utils.modeling import load_causal_lm, load_tokenizer
@@ -68,6 +70,94 @@ def _write_rollout_state(
             "completed": completed,
         },
     )
+
+
+def _genprm_config(config: dict[str, Any]) -> dict[str, Any]:
+    explicit = config.get("genprm_teacher")
+    if isinstance(explicit, dict) and explicit:
+        merged = dict(explicit)
+    else:
+        merged = {
+            "teacher_backend": "qwen_rag",
+            "teacher_model_path": config.get("teacher_model_path") or config.get("base_model_path") or "models/Qwen3-8B",
+            "teacher_load_in_4bit": config.get("genprm_teacher_load_in_4bit", True),
+            "rag_index_dir": config.get("rag_index_dir", "data/rag/or_books"),
+            "rag_candidate_top_k": config.get("rag_candidate_top_k", 30),
+            "rag_top_k": config.get("rag_top_k", 5),
+            "rag_max_context_chars": config.get("rag_max_context_chars", 4500),
+            "rag_use_semantic_rerank": config.get("rag_use_semantic_rerank", True),
+            "rag_reranker_model": config.get("rag_reranker_model", "models/msmarco-minilm-reranker"),
+            "rag_reranker_batch_size": config.get("rag_reranker_batch_size", 16),
+            "rag_reranker_max_length": config.get("rag_reranker_max_length", 256),
+            "rag_fail_on_reranker_error": config.get("rag_fail_on_reranker_error", False),
+            "qwen_enable_thinking": config.get("qwen_enable_thinking", False),
+        }
+    merged.setdefault("teacher_backend", "qwen_rag")
+    return merged
+
+
+def _audit_rollout_rows(config: dict[str, Any], rows: list[dict], output_path: Path | None = None) -> dict[str, Any]:
+    if not bool(config.get("genprm_evaluation", False)):
+        return {"genprm_enabled": False, "genprm_evaluated": 0, "genprm_passed": 0}
+
+    teacher = build_teacher_generator(_genprm_config(config))
+    if teacher is None or not hasattr(teacher, "audit_trajectory"):
+        return {
+            "genprm_enabled": True,
+            "genprm_evaluated": 0,
+            "genprm_passed": 0,
+            "genprm_error": "teacher_backend_does_not_support_audit",
+        }
+
+    evaluated = 0
+    passed = 0
+    min_correct_steps = int(config.get("genprm_min_correct_steps", 8))
+    require_all_correct = bool(config.get("genprm_require_all_correct", False))
+    max_tokens = int(config.get("genprm_max_tokens", 4200))
+
+    for row in tqdm(rows, desc="Auditing rollouts with GenPRM"):
+        for traj in row.get("trajectories", []):
+            if traj.get("process_verification"):
+                audit = traj["process_verification"]
+            else:
+                audit = teacher.audit_trajectory(
+                    question=row["question"],
+                    response=traj.get("response", ""),
+                    verification=traj.get("verification", {}),
+                    template_name=row.get("template_name"),
+                    max_tokens=max_tokens,
+                )
+                traj["process_verification"] = audit
+            evaluated += 1
+            if audit_passes_threshold(
+                audit,
+                min_correct_steps=min_correct_steps,
+                require_all_correct=require_all_correct,
+            ):
+                passed += 1
+            traj["process_score"] = process_score_from_audit(
+                traj.get("response", ""),
+                traj.get("verification", {}),
+                audit,
+            )
+        row["trajectories"] = sorted(row.get("trajectories", []), key=rank_key, reverse=True)
+
+    if output_path is not None:
+        write_jsonl(output_path, rows)
+
+    model_name = teacher_model_name(teacher)
+    del teacher
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    return {
+        "genprm_enabled": True,
+        "genprm_teacher_model": model_name,
+        "genprm_evaluated": evaluated,
+        "genprm_passed": passed,
+        "genprm_pass_rate": round(passed / evaluated, 4) if evaluated else 0.0,
+        "genprm_min_correct_steps": min_correct_steps,
+        "genprm_require_all_correct": require_all_correct,
+    }
 
 
 def run_rollout_generation(
@@ -276,6 +366,8 @@ def generate_real_rollouts_from_config(config: dict[str, Any], run_dir: str | Pa
         rows, summary, teacher_scores = run_rollout_generation(config)
         write_jsonl(output_path, rows)
 
+    audit_summary = _audit_rollout_rows(config, rows, output_path)
+    summary.update(audit_summary)
     save_rollout_dashboard(summary["solver_status_counts"], teacher_scores, target_dir / "rollout_dashboard.png")
     summary["run_dir"] = str(target_dir)
     summary["output_path"] = str(output_path)
@@ -288,3 +380,18 @@ def generate_real_rollouts_from_config(config: dict[str, Any], run_dir: str | Pa
 def generate_real_rollouts(config_path: str | Path) -> dict[str, Any]:
     config = load_yaml_config(config_path)
     return generate_real_rollouts_from_config(config)
+
+
+def audit_rollouts(
+    rollout_path: str | Path,
+    config_path: str | Path = "configs/stage1_real_rollout.yaml",
+    output_path: str | Path | None = None,
+) -> dict[str, Any]:
+    config = load_yaml_config(config_path)
+    config["genprm_evaluation"] = True
+    source = Path(rollout_path)
+    target = Path(output_path) if output_path is not None else source
+    rows = read_jsonl(source)
+    summary = _audit_rollout_rows(config, rows, target)
+    write_json(target.parent / "genprm_audit_summary.json", summary)
+    return summary

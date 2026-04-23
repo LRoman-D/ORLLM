@@ -4,7 +4,7 @@ import typer
 
 from steporlm_stage1.utils.io import ensure_project_dirs
 
-app = typer.Typer(help="Stage-1 local StepORLM toolchain.")
+app = typer.Typer(help="Qwen3-8B ORLLM loop with RAG teacher, GenPRM audit, SFT, rollout, and DPO.")
 ensure_project_dirs()
 
 
@@ -36,7 +36,7 @@ def evaluate_rag_cmd(config_path: str = "configs/rag_eval.yaml") -> None:
 
 @app.command("summarize-sft-quality")
 def summarize_sft_quality_cmd(
-    dataset_dir: str = "data/processed/stage1_dataset",
+    dataset_dir: str = "data/processed/qwen3_rag_teacher",
     output_path: str | None = None,
 ) -> None:
     from steporlm_stage1.rag.evaluation import summarize_sft_quality
@@ -47,8 +47,8 @@ def summarize_sft_quality_cmd(
 
 @app.command("prepare-sft")
 def prepare_sft(
-    input_dir: str = "data/processed/stage1_dataset",
-    output_dir: str = "data/processed/stage1_sft",
+    input_dir: str = "data/processed/qwen3_rag_teacher",
+    output_dir: str = "data/processed/qwen3_sft",
 ) -> None:
     from steporlm_stage1.training.sft.prepare_dataset import prepare_sft_dataset
 
@@ -64,17 +64,35 @@ def generate_real_rollouts_cmd(config_path: str = "configs/stage1_real_rollout.y
     typer.echo(summary)
 
 
+@app.command("audit-rollouts")
+def audit_rollouts_cmd(
+    rollout_path: str,
+    config_path: str = "configs/stage1_real_rollout.yaml",
+    output_path: str | None = None,
+) -> None:
+    from steporlm_stage1.rollout.generate_real_rollouts import audit_rollouts
+
+    summary = audit_rollouts(rollout_path, config_path, output_path)
+    typer.echo(summary)
+
+
 @app.command("build-preferences")
 def build_preferences(
-    rollout_path: str = "data/processed/stage1_rollouts.jsonl",
+    rollout_path: str = "runs/qwen3_8b/rollouts/real_rollouts.jsonl",
     output_path: str | None = None,
-    run_root: str = "runs",
+    run_root: str = "runs/qwen3_8b",
     run_prefix: str = "preferences",
     require_chosen_success: bool = typer.Option(
         False,
         "--require-chosen-success/--allow-unsuccessful-chosen",
         help="Only keep preference pairs whose chosen trajectory already passed solver verification.",
     ),
+    require_chosen_process_pass: bool = typer.Option(
+        False,
+        "--require-chosen-process-pass/--allow-process-warnings",
+        help="Only keep preference pairs whose chosen trajectory passed the GenPRM process threshold.",
+    ),
+    min_correct_steps: int = typer.Option(8, "--min-correct-steps", help="Minimum GenPRM-correct steps for chosen trajectories."),
 ) -> None:
     from steporlm_stage1.preference.build_pairs import build_preference_pairs
 
@@ -85,13 +103,15 @@ def build_preferences(
         run_prefix=run_prefix,
         timestamped=True,
         require_chosen_success=require_chosen_success,
+        require_chosen_process_pass=require_chosen_process_pass,
+        min_correct_steps=min_correct_steps,
     )
     typer.echo(summary)
 
 
 @app.command("evaluate")
 def evaluate(
-    dataset_path: str = "data/processed/stage1_dataset/test.jsonl",
+    dataset_path: str = "data/processed/qwen3_rag_teacher/test.jsonl",
     predictions_path: str | None = None,
     output_path: str = "reports/eval_stage1.json",
 ) -> None:

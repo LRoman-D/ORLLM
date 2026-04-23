@@ -31,9 +31,8 @@ logs/
 nohup.out
 
 # Runtime outputs
-outputs/*
-!outputs/qwen2.5-7b-stage1-lora/
-!outputs/qwen2.5-7b-stage1-lora/**
+artifacts/
+outputs/
 results/
 runs/
 reports/
@@ -43,22 +42,14 @@ checkpoints/
 data/*
 !data/.gitkeep
 !data/README.md
-!data/processed/
-!data/processed/stage1_dataset/
-!data/processed/stage1_dataset/train.jsonl
-!data/processed/stage1_sft/
-!data/processed/stage1_sft/train.jsonl
 models/*
 !models/.gitkeep
 !models/README.md
 *.bin
-!outputs/qwen2.5-7b-stage1-lora/training_args.bin
-!outputs/qwen2.5-7b-stage1-lora_runs/sft_train_20260421_004434/weights/final_adapter/training_args.bin
 *.pt
 *.pth
 *.ckpt
 *.safetensors
-!outputs/qwen2.5-7b-stage1-lora/adapter_model.safetensors
 
 # Caches
 .cache/
