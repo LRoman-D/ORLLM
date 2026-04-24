@@ -58,39 +58,35 @@ def main() -> None:
 
     cfg_path = Path(args.config)
     cfg = _load_yaml(cfg_path)
-    output_dir = Path(str(cfg.get("output_dir", "data/processed/qwen3_rag_teacher")))
-    pending_file = output_dir / str(cfg.get("pending_records_file", "accepted_pending.jsonl"))
-    state_file = output_dir / str(cfg.get("state_file", "generation_state.json"))
+    output_dir = Path(str(cfg.get("external_data_dir", "data/external_or")))
+    sft_dir = Path(str(cfg.get("sft_source_dir", output_dir / "sft_teacher")))
     summary_file = output_dir / "summary.json"
+    sft_summary_file = sft_dir / "summary.json"
 
-    state = _safe_read_json(state_file)
     summary = _safe_read_json(summary_file)
+    sft_summary = _safe_read_json(sft_summary_file)
 
-    attempted = int(state.get("attempted_trajectories", summary.get("attempted_trajectories", 0)))
-    accepted = int(state.get("accepted_samples", summary.get("accepted_samples", 0)))
+    attempted = int(sft_summary.get("attempted_trajectories", 0))
+    accepted = int(sft_summary.get("accepted_samples", 0))
     verification_rate = round(accepted / attempted, 4) if attempted > 0 else 0.0
 
     split_counts = {}
-    for split_name in dict(cfg.get("splits", {"train": 1.0})).keys():
-        split_counts[split_name] = _count_lines(output_dir / f"{split_name}.jsonl")
+    for split_name in ["sft", "rollout", "eval"]:
+        split_counts[split_name] = _count_lines(output_dir / "splits" / f"{split_name}_questions.jsonl")
 
     report = {
         "config": str(cfg_path),
         "output_dir": str(output_dir),
-        "target_verified_samples": int(cfg.get("target_verified_samples", 0)),
-        "accepted_records_pending": _count_lines(pending_file),
-        "unique_questions_pending": _count_unique_questions(pending_file),
+        "sft_source_dir": str(sft_dir),
+        "total_external_questions": int(summary.get("num_questions", 0)),
+        "max_sft_samples": int(cfg.get("max_sft_samples", 0)),
+        "accepted_sft_records": _count_lines(sft_dir / "train.jsonl"),
+        "unique_sft_questions": _count_unique_questions(sft_dir / "train.jsonl"),
         "attempted_trajectories": attempted,
         "accepted_samples": accepted,
         "verification_rate": verification_rate,
-        "seed_problem_count": int(state.get("seed_problem_count", summary.get("seed_problem_count", 0))),
-        "question_variant_count": int(state.get("question_variant_count", summary.get("question_variant_count", 0))),
-        "api_request_errors": int(state.get("api_request_errors", summary.get("api_request_errors", 0))),
-        "genprm_attempted": int(state.get("genprm_attempted", summary.get("genprm_attempted", 0))),
-        "genprm_rejected": int(state.get("genprm_rejected", summary.get("genprm_rejected", 0))),
-        "genprm_acceptance_rate": summary.get("genprm_acceptance_rate", 0.0),
-        "completed": bool(state.get("completed", summary.get("completed", False))),
-        "interrupted": bool(state.get("interrupted", summary.get("interrupted", False))),
+        "source_counts": summary.get("source_counts", {}),
+        "source_statuses": summary.get("source_statuses", []),
         "split_counts": split_counts,
     }
     print(json.dumps(report, ensure_ascii=False, indent=2))

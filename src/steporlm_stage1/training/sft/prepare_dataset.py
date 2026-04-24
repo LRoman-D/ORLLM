@@ -20,7 +20,8 @@ def prepare_sft_dataset(input_dir: str | Path, output_dir: str | Path) -> dict[s
             converted.append(
                 {
                     "problem_id": row["problem_id"],
-                    "template_name": row["template_name"],
+                    "template_name": row.get("template_name", "external_or"),
+                    "source_name": row.get("source_name"),
                     "messages": [
                         {"role": "system", "content": SYSTEM_PROMPT},
                         {"role": "user", "content": USER_PROMPT_TEMPLATE.format(question=row["question"])},
@@ -31,4 +32,3 @@ def prepare_sft_dataset(input_dir: str | Path, output_dir: str | Path) -> dict[s
         write_jsonl(target_dir / f"{split}.jsonl", converted)
         counts[split] = len(converted)
     return counts
-

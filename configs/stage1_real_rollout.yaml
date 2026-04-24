@@ -1,7 +1,7 @@
 base_model_path: models/Qwen3-8B
 model_path: artifacts/qwen3-8b/sft-lora
 is_adapter: true
-dataset_path: data/processed/qwen3_rag_teacher/train.jsonl
+dataset_path: data/external_or/splits/rollout_questions.jsonl
 output_path: runs/qwen3_8b/rollouts/real_rollouts.jsonl
 run_root: runs
 run_prefix: rollout_qwen3_8b
@@ -40,4 +40,3 @@ genprm_teacher:
   rag_rerank_keyword_blend: 0.62
   rag_modeling_boost: 0.12
   rag_fail_on_reranker_error: false
-

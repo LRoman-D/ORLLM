@@ -26,4 +26,3 @@ warmup_steps: 10
 lr_scheduler_type: cosine
 max_grad_norm: 0.3
 resume_from_checkpoint: true
-

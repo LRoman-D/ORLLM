@@ -10,9 +10,17 @@ ensure_project_dirs()
 
 @app.command("generate-dataset")
 def generate_dataset(config_path: str = "configs/stage1_data.yaml") -> None:
-    from steporlm_stage1.data_factory.pipeline import Stage1DataFactory
+    from steporlm_stage1.external_or_data import prepare_external_or_data
 
-    summary = Stage1DataFactory.from_yaml(config_path).generate()
+    summary = prepare_external_or_data(config_path)
+    typer.echo(summary)
+
+
+@app.command("prepare-external-data")
+def prepare_external_data_cmd(config_path: str = "configs/stage1_data.yaml") -> None:
+    from steporlm_stage1.external_or_data import prepare_external_or_data
+
+    summary = prepare_external_or_data(config_path)
     typer.echo(summary)
 
 
@@ -36,7 +44,7 @@ def evaluate_rag_cmd(config_path: str = "configs/rag_eval.yaml") -> None:
 
 @app.command("summarize-sft-quality")
 def summarize_sft_quality_cmd(
-    dataset_dir: str = "data/processed/qwen3_rag_teacher",
+    dataset_dir: str = "data/external_or/sft_teacher",
     output_path: str | None = None,
 ) -> None:
     from steporlm_stage1.rag.evaluation import summarize_sft_quality
@@ -47,7 +55,7 @@ def summarize_sft_quality_cmd(
 
 @app.command("prepare-sft")
 def prepare_sft(
-    input_dir: str = "data/processed/qwen3_rag_teacher",
+    input_dir: str = "data/external_or/sft_teacher",
     output_dir: str = "data/processed/qwen3_sft",
 ) -> None:
     from steporlm_stage1.training.sft.prepare_dataset import prepare_sft_dataset
@@ -111,7 +119,7 @@ def build_preferences(
 
 @app.command("evaluate")
 def evaluate(
-    dataset_path: str = "data/processed/qwen3_rag_teacher/test.jsonl",
+    dataset_path: str = "data/external_or/splits/eval_questions.jsonl",
     predictions_path: str | None = None,
     output_path: str = "reports/eval_stage1.json",
 ) -> None:

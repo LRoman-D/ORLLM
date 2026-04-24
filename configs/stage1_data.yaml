@@ -1,4 +1,22 @@
 seed: 2026
+external_data_dir: data/external_or
+sft_source_dir: data/external_or/sft_teacher
+
+# Questions and reference answers are downloaded from the external channels only.
+# Inaccessible channels are skipped and reported in data/external_or/summary.json.
+max_rows_per_source: 0
+splits:
+  sft: 0.6
+  rollout: 0.2
+  eval: 0.2
+
+# SFT responses are generated for external SFT questions, then verified against
+# the external reference answer before they enter data/external_or/sft_teacher.
+build_sft_trajectories: true
+sft_response_mode: teacher_verified
+max_sft_samples: 240
+resume_from_checkpoint: true
+
 teacher_backend: qwen_rag
 teacher_model_path: models/Qwen3-8B
 teacher_load_in_4bit: true
@@ -20,55 +38,14 @@ rag_modeling_boost: 0.12
 rag_use_query_rewrite: false
 rag_fail_on_reranker_error: false
 
-rag_template_constraints_enabled: true
-rag_tsp_filtered_top_k: 2
-rag_tsp_min_alpha_token_ratio: 0.52
-rag_tsp_max_digit_token_ratio: 0.36
-rag_tsp_require_keyword_match: true
-
 genprm_evaluation: true
 genprm_min_correct_steps: 8
 genprm_require_all_correct: false
 genprm_max_tokens: 4200
 
-target_verified_samples: 240
-max_seed_problems: 900
-verbose_generation: true
-question_variants_per_seed: 2
-include_canonical_question: true
-question_rewrite_styles:
-  - operations memo
-  - planner handoff
-  - procurement brief
-  - classroom modeling exercise
-  - internal analytics request
-  - on-call dispatch note
-  - supply chain review
-  - plant manager escalation
-question_rewrite_temperature: 0.55
-question_rewrite_max_tokens: 900
-trajectories_per_variant: 3
+trajectories_per_question: 3
 trajectory_temperatures: [0.0, 0.18, 0.36]
 trajectory_top_p: 0.9
 trajectory_repetition_penalty: 1.03
 trajectory_max_tokens: 2600
 timeout_seconds: 35
-
-output_dir: data/processed/qwen3_rag_teacher
-resume_from_checkpoint: true
-pending_records_file: accepted_pending.jsonl
-state_file: generation_state.json
-trace_file: generation_trace.jsonl
-
-splits:
-  train: 0.9
-  valid: 0.05
-  test: 0.05
-
-template_weights:
-  resource_allocation: 1
-  production_planning: 1
-  assignment: 1
-  knapsack: 1
-  tsp: 1
-

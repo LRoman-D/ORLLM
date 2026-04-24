@@ -9,11 +9,10 @@ from typing import Any
 import torch
 from tqdm import tqdm
 
-from steporlm_stage1.data_factory.qwen_rag_teacher import QwenRagTeacherGenerator
+from steporlm_stage1.teachers.qwen_rag import QwenRagTeacherGenerator
 from steporlm_stage1.executors.python_executor import PythonCodeExecutor
 from steporlm_stage1.schemas import ReferenceSolution
-from steporlm_stage1.templates.registry import TEMPLATE_REGISTRY
-from steporlm_stage1.utils.io import load_yaml_config, write_json, write_jsonl
+from steporlm_stage1.utils.io import load_yaml_config, read_jsonl, write_json, write_jsonl
 from steporlm_stage1.utils.run_dirs import create_timestamped_run_dir
 from steporlm_stage1.utils.text import extract_python_code
 
@@ -21,34 +20,21 @@ from steporlm_stage1.utils.text import extract_python_code
 def _generate_shared_questions(config: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     rng = random.Random(int(config.get("seed", 2026)))
     target_questions = int(config.get("target_questions", 40))
-    template_weights = dict(config.get("template_weights", {}))
-    if not template_weights:
-        raise ValueError("benchmark.template_weights must not be empty")
+    dataset_path = config.get("dataset_path") or config.get("eval_dataset_path")
+    if not dataset_path:
+        raise ValueError("benchmark.dataset_path must point to external eval questions.")
 
-    template_counter: Counter[str] = Counter()
-    questions: list[dict[str, Any]] = []
-    names = list(template_weights.keys())
-    probs = [template_weights[name] for name in names]
-    for idx in range(target_questions):
-        template_name = rng.choices(names, weights=probs, k=1)[0]
-        template = TEMPLATE_REGISTRY[template_name]
-        instance = template.sample_instance(rng)
-        question = template.render_question(instance, rng)
-        reference = template.solve_reference(instance)
-        questions.append(
-            {
-                "problem_id": f"{template_name}-ablation{idx:04d}",
-                "template_name": template_name,
-                "question": question,
-                "instance": instance,
-                "reference_solution": reference.to_dict(),
-            }
-        )
-        template_counter[template_name] += 1
+    questions = read_jsonl(dataset_path)
+    if target_questions > 0 and len(questions) > target_questions:
+        questions = rng.sample(questions, target_questions)
+    for row in questions:
+        row.setdefault("template_name", "external_or")
+    source_counter = Counter(row.get("source_name", row.get("source", "unknown")) for row in questions)
 
     summary = {
         "num_questions": len(questions),
-        "template_distribution": dict(template_counter),
+        "dataset_path": str(dataset_path),
+        "source_distribution": dict(source_counter),
     }
     return questions, summary
 
@@ -208,7 +194,7 @@ def run_rag_ablation(config_path: str | Path) -> dict[str, Any]:
                     "problem_id": row["problem_id"],
                     "template_name": row["template_name"],
                     "question": row["question"],
-                    "instance": row["instance"],
+                    "instance": row.get("instance", {}),
                     "reference_solution": row["reference_solution"],
                     "mode": mode_name,
                     "rag_top_k": top_k,

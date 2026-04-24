@@ -21,12 +21,12 @@ if [[ ! -f data/rag/or_books/chunks.jsonl ]]; then
   python -m steporlm_stage1.cli build-rag-index --config-path configs/rag_index.yaml
 fi
 
-echo "[$(date '+%F %T')] Step 1/7: generate teacher data with RAG + GenPRM"
+echo "[$(date '+%F %T')] Step 1/7: prepare external OR questions and verified SFT trajectories"
 python -m steporlm_stage1.cli generate-dataset --config-path configs/stage1_data.yaml
 
-echo "[$(date '+%F %T')] Step 2/7: convert accepted teacher data to chat SFT"
+echo "[$(date '+%F %T')] Step 2/7: convert external teacher trajectories to chat SFT"
 python -m steporlm_stage1.cli prepare-sft \
-  --input-dir data/processed/qwen3_rag_teacher \
+  --input-dir data/external_or/sft_teacher \
   --output-dir data/processed/qwen3_sft
 
 echo "[$(date '+%F %T')] Step 3/7: train Qwen3-8B SFT LoRA"

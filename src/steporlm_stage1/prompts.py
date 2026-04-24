@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from steporlm_stage1.data_factory.zhipu_teacher import build_solver_hint
+from steporlm_stage1.teachers.zhipu import build_solver_hint
 from steporlm_stage1.quality.genprm import GENPRM_STEP_TITLES
 
 
@@ -76,6 +76,11 @@ Additional requirements:
 
 def _build_rollout_domain_hint(template_name: str) -> str:
     hints = {
+        "external_or": (
+            "Use the variable domain stated or implied by the external benchmark question. "
+            "The reference value may be the optimal objective or the requested optimal decision value; "
+            "put the numeric benchmark answer in `objective_value`."
+        ),
         "resource_allocation": "Use continuous nonnegative decision variables unless the question explicitly asks for integers.",
         "production_planning": "Use integer quantity variables plus binary activation variables when setup/opening decisions are present.",
         "assignment": "Use binary assignment variables with one-to-one coverage constraints.",
@@ -83,4 +88,3 @@ def _build_rollout_domain_hint(template_name: str) -> str:
         "tsp": "Use the OR-Tools routing solver and report the closed-tour objective value.",
     }
     return hints.get(template_name, "Match the variable domain stated or implied by the question.")
-

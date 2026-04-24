@@ -3,42 +3,9 @@ run_prefix: compare_qwen3_8b
 teacher_evaluation: false
 
 benchmark:
-  teacher_backend: qwen_rag
-  teacher_model_path: models/Qwen3-8B
-  teacher_load_in_4bit: true
-  teacher_enable_thinking: false
-  use_bf16_if_available: true
-  rag_index_dir: data/rag/or_books
-  rag_candidate_top_k: 40
-  rag_top_k: 5
-  rag_max_context_chars: 4200
-  rag_context_max_chunk_chars: 900
-  rag_use_semantic_rerank: true
-  rag_reranker_model: models/msmarco-minilm-reranker
-  rag_reranker_batch_size: 16
-  rag_reranker_max_length: 256
-  rag_rerank_keyword_blend: 0.62
-  rag_modeling_boost: 0.12
-  rag_fail_on_reranker_error: false
+  dataset_path: data/external_or/splits/eval_questions.jsonl
   seed: 2026
   target_questions: 80
-  max_seed_problems: 160
-  question_variants_per_seed: 1
-  include_canonical_question: true
-  question_rewrite_styles:
-    - operations memo
-    - planner handoff
-    - classroom modeling exercise
-  question_rewrite_temperature: 0.45
-  question_rewrite_max_tokens: 700
-  trajectory_top_p: 0.9
-  trajectory_repetition_penalty: 1.03
-  template_weights:
-    resource_allocation: 1
-    production_planning: 1
-    assignment: 1
-    knapsack: 1
-    tsp: 1
 
 rollout:
   num_return_sequences: 4
@@ -65,4 +32,3 @@ models:
     model_path: artifacts/qwen3-8b/dpo-lora
     base_model_path: models/Qwen3-8B
     is_adapter: true
-

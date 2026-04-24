@@ -55,7 +55,7 @@ def build_preference_pairs(
         pairs.append(
             PreferencePair(
                 problem_id=row["problem_id"],
-                template_name=row["template_name"],
+                template_name=row.get("template_name", "external_or"),
                 question=row["question"],
                 chosen=chosen,
                 rejected=rejected,

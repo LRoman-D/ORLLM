@@ -7,7 +7,7 @@ from typing import Any
 import torch
 from tqdm import tqdm
 
-from steporlm_stage1.data_factory.teacher_factory import build_teacher_generator, teacher_model_name
+from steporlm_stage1.teachers.factory import build_teacher_generator, teacher_model_name
 from steporlm_stage1.evaluators.teacher import ZhipuTeacherEvaluator
 from steporlm_stage1.executors.python_executor import PythonCodeExecutor
 from steporlm_stage1.preference.ranking import rank_key, teacher_score
@@ -124,7 +124,7 @@ def _audit_rollout_rows(config: dict[str, Any], rows: list[dict], output_path: P
                     question=row["question"],
                     response=traj.get("response", ""),
                     verification=traj.get("verification", {}),
-                    template_name=row.get("template_name"),
+                    template_name=row.get("template_name", "external_or"),
                     max_tokens=max_tokens,
                 )
                 traj["process_verification"] = audit
@@ -212,7 +212,7 @@ def run_rollout_generation(
 
             prompt_messages = [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": build_rollout_user_prompt(row["question"], row["template_name"])},
+                {"role": "user", "content": build_rollout_user_prompt(row["question"], row.get("template_name", "external_or"))},
             ]
             prompt_text = tokenizer.apply_chat_template(prompt_messages, tokenize=False, add_generation_prompt=True)
             inputs = tokenizer(prompt_text, return_tensors="pt")
@@ -264,7 +264,8 @@ def run_rollout_generation(
 
             rollout_row = {
                 "problem_id": row["problem_id"],
-                "template_name": row["template_name"],
+                "template_name": row.get("template_name", "external_or"),
+                "source_name": row.get("source_name"),
                 "question": row["question"],
                 "reference_solution": row["reference_solution"],
                 "trajectories": sorted(trajectories, key=rank_key, reverse=True),

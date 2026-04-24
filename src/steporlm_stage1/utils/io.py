@@ -13,6 +13,8 @@ CONFIG_PATH_KEYS = {
     "base_model_path",
     "config_path",
     "dataset_path",
+    "eval_dataset_path",
+    "external_data_dir",
     "input_dir",
     "index_dir",
     "model_name_or_path",
@@ -25,6 +27,7 @@ CONFIG_PATH_KEYS = {
     "root",
     "run_root",
     "sft_adapter_path",
+    "sft_source_dir",
     "source_dir",
     "teacher_model_path",
 }

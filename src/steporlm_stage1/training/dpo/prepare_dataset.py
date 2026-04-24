@@ -33,7 +33,7 @@ def prepare_dpo_dataset(config_path: str | Path) -> dict[str, int | str]:
         converted.append(
             {
                 "problem_id": row["problem_id"],
-                "template_name": row["template_name"],
+                "template_name": row.get("template_name", "external_or"),
                 "prompt_messages": [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": USER_PROMPT_TEMPLATE.format(question=row["question"])},
