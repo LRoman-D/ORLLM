@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 
+def executable_optimal(traj: dict) -> int:
+    verification = traj.get("verification") or {}
+    return 1 if verification.get("execution_ok") and str(verification.get("status", "")).upper() == "OPTIMAL" else 0
+
+
 def teacher_score(traj: dict) -> float:
     teacher = traj.get("teacher_evaluation") or {}
     try:
@@ -36,12 +41,12 @@ def rank_key(traj: dict) -> tuple[int, int, int, int, float, float, float]:
     process_score = float(traj.get("process_score", 0.0))
     return (
         success,
+        executable_optimal(traj),
         objective_match,
         process_audit_all_correct(traj),
         process_audit_correct_count(traj),
         process_audit_score(traj),
-        teacher_score(traj),
-        process_score,
+        max(teacher_score(traj), process_score),
     )
 
 
@@ -50,6 +55,8 @@ def build_weight(chosen: dict, rejected: dict) -> tuple[float, str]:
     r_ver = rejected["verification"]
     if c_ver.get("success") and not r_ver.get("success"):
         return 1.0, "solver_success_beats_failure"
+    if executable_optimal(chosen) and not executable_optimal(rejected):
+        return 0.92, "optimal_execution_beats_nonoptimal_or_failed"
     if c_ver.get("objective_match") and not r_ver.get("objective_match"):
         return 0.85, "objective_match_beats_mismatch"
     if process_audit_all_correct(chosen) and not process_audit_all_correct(rejected):

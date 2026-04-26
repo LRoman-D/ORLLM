@@ -108,6 +108,8 @@ def save_comparison_dashboard(model_metrics: list[dict[str, float | str]], path:
     ensure_dir(target.parent)
     names = [str(item["model_name"]) for item in model_metrics]
     execution = [float(item.get("execution_rate", 0.0)) for item in model_metrics]
+    pass_at_k = [float(item.get("pass_at_k", item.get("pass_at_1", 0.0))) for item in model_metrics]
+    optimal_at_k = [float(item.get("optimal_execution_at_k", item.get("feasible_rate", 0.0))) for item in model_metrics]
     success = [float(item.get("pass_at_1", 0.0)) for item in model_metrics]
     gap = [float(item.get("mean_abs_objective_gap", 0.0)) for item in model_metrics]
     teacher_mean = [float(item.get("teacher_mean_score", 0.0)) for item in model_metrics]
@@ -115,9 +117,11 @@ def save_comparison_dashboard(model_metrics: list[dict[str, float | str]], path:
 
     fig, axes = plt.subplots(1, 3, figsize=(16, 5.2), dpi=220)
     x_positions = range(len(names))
-    axes[0].bar(x_positions, execution, width=0.35, label="execution", color="#2F6BFF")
-    axes[0].bar([x + 0.35 for x in x_positions], success, width=0.35, label="pass@1", color="#5CB85C")
-    axes[0].set_xticks([x + 0.175 for x in x_positions], names)
+    axes[0].bar(x_positions, execution, width=0.2, label="execution@1", color="#2F6BFF")
+    axes[0].bar([x + 0.2 for x in x_positions], optimal_at_k, width=0.2, label="optimal@k", color="#5CB85C")
+    axes[0].bar([x + 0.4 for x in x_positions], success, width=0.2, label="pass@1", color="#E45756")
+    axes[0].bar([x + 0.6 for x in x_positions], pass_at_k, width=0.2, label="pass@k", color="#9467BD")
+    axes[0].set_xticks([x + 0.3 for x in x_positions], names)
     axes[0].set_ylim(0, 1.05)
     axes[0].set_title("Solver Metrics")
     axes[0].legend()

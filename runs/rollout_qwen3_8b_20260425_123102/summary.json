@@ -1,0 +1,24 @@
+{
+  "num_problems": 349,
+  "num_trajectories": 1047,
+  "solver_status_counts": {
+    "OPTIMAL": 914,
+    "FEASIBLE": 24,
+    "NOT_SOLVED": 17,
+    "RUNTIME_ERROR": 81,
+    "None": 7,
+    "INFEASIBLE": 3,
+    "MISSING_RESULT": 1
+  },
+  "problems_with_success": 326,
+  "problem_success_rate": 0.9341,
+  "consecutive_zero_success": 0,
+  "teacher_enabled": false,
+  "genprm_enabled": false,
+  "genprm_evaluated": 0,
+  "genprm_passed": 0,
+  "run_dir": "/root/shared-nvme/ORLLM/runs/rollout_qwen3_8b_20260425_123102",
+  "output_path": "/root/shared-nvme/ORLLM/runs/qwen3_8b/rollouts/real_rollouts.jsonl",
+  "resume_from_checkpoint": true,
+  "state_path": "/root/shared-nvme/ORLLM/runs/qwen3_8b/rollouts/rollout_state.json"
+}

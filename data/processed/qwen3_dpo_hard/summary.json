@@ -1,0 +1,10 @@
+{
+  "source_pairs": 74,
+  "selected_pairs": 74,
+  "max_pairs": 0,
+  "shuffle_before_limit": true,
+  "sampling_seed": 2026,
+  "train": 66,
+  "valid": 8,
+  "output_dir": "/root/shared-nvme/ORLLM/data/processed/qwen3_dpo_hard"
+}

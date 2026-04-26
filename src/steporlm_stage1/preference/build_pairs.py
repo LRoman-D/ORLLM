@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from steporlm_stage1.preference.ranking import build_weight, rank_key, teacher_score
+from steporlm_stage1.preference.ranking import build_weight, executable_optimal, rank_key, teacher_score
 from steporlm_stage1.quality.genprm import audit_passes_threshold
 from steporlm_stage1.schemas import PreferencePair
 from steporlm_stage1.utils.plots import save_preference_dashboard
@@ -18,8 +18,10 @@ def build_preference_pairs(
     run_prefix: str = "preferences",
     timestamped: bool = True,
     require_chosen_success: bool = False,
+    require_chosen_executable_optimal: bool = False,
     require_chosen_process_pass: bool = False,
     min_correct_steps: int = 8,
+    min_weight: float = 0.0,
 ) -> dict[str, int | str]:
     rows = read_jsonl(rollout_path)
     run_dir = create_timestamped_run_dir(run_root, run_prefix) if timestamped else (Path(report_dir) if report_dir else Path(run_root))
@@ -32,7 +34,9 @@ def build_preference_pairs(
     rationales = {}
     teacher_scores = []
     skipped_for_unsuccessful_chosen = 0
+    skipped_for_nonoptimal_execution = 0
     skipped_for_process = 0
+    skipped_for_low_weight = 0
     for row in rows:
         ranked = sorted(row["trajectories"], key=rank_key, reverse=True)
         if len(ranked) < 2:
@@ -41,6 +45,9 @@ def build_preference_pairs(
         rejected = ranked[-1]
         if require_chosen_success and not bool(chosen.get("verification", {}).get("success")):
             skipped_for_unsuccessful_chosen += 1
+            continue
+        if require_chosen_executable_optimal and not executable_optimal(chosen):
+            skipped_for_nonoptimal_execution += 1
             continue
         if require_chosen_process_pass and not audit_passes_threshold(
             chosen.get("process_verification"),
@@ -52,6 +59,9 @@ def build_preference_pairs(
         if chosen["trajectory_id"] == rejected["trajectory_id"]:
             continue
         weight, rationale = build_weight(chosen, rejected)
+        if weight < float(min_weight):
+            skipped_for_low_weight += 1
+            continue
         pairs.append(
             PreferencePair(
                 problem_id=row["problem_id"],
@@ -76,10 +86,14 @@ def build_preference_pairs(
         "run_dir": str(report_path),
         "rationales": rationales,
         "require_chosen_success": require_chosen_success,
+        "require_chosen_executable_optimal": require_chosen_executable_optimal,
         "require_chosen_process_pass": require_chosen_process_pass,
         "min_correct_steps": min_correct_steps,
+        "min_weight": min_weight,
         "skipped_for_unsuccessful_chosen": skipped_for_unsuccessful_chosen,
+        "skipped_for_nonoptimal_execution": skipped_for_nonoptimal_execution,
         "skipped_for_process": skipped_for_process,
+        "skipped_for_low_weight": skipped_for_low_weight,
     }
     write_json(report_path / "summary.json", summary)
     return summary

@@ -15,8 +15,15 @@ class PythonCodeExecutor:
         self.timeout_seconds = timeout_seconds
         self.python_executable = python_executable or sys.executable
 
-    def verify(self, code: str, reference: ReferenceSolution, tolerance: float = 1e-4) -> VerificationResult:
+    def verify(
+        self,
+        code: str,
+        reference: ReferenceSolution,
+        tolerance: float = 1e-4,
+        relative_tolerance: float = 0.0,
+    ) -> VerificationResult:
         marker = "__STEPORLM_RESULT__="
+        effective_tolerance = self._effective_tolerance(reference.objective_value, tolerance, relative_tolerance)
         with tempfile.TemporaryDirectory(prefix="steporlm_stage1_") as tmp_dir:
             script_path = Path(tmp_dir) / "candidate.py"
             script_path.write_text(code, encoding="utf-8")
@@ -36,7 +43,7 @@ class PythonCodeExecutor:
                     status="TIMEOUT",
                     objective_value=None,
                     objective_match=False,
-                    tolerance=tolerance,
+                    tolerance=effective_tolerance,
                     stdout=exc.stdout or "",
                     stderr=exc.stderr or "",
                     error_message=f"Execution timed out after {self.timeout_seconds} seconds.",
@@ -50,7 +57,7 @@ class PythonCodeExecutor:
                 status="RUNTIME_ERROR",
                 objective_value=None,
                 objective_match=False,
-                tolerance=tolerance,
+                tolerance=effective_tolerance,
                 stdout=stdout,
                 stderr=stderr,
                 error_message=f"Python exited with code {completed.returncode}.",
@@ -67,7 +74,7 @@ class PythonCodeExecutor:
                 status="MISSING_RESULT",
                 objective_value=None,
                 objective_match=False,
-                tolerance=tolerance,
+                tolerance=effective_tolerance,
                 stdout=stdout,
                 stderr=stderr,
                 error_message="Result marker not found in stdout.",
@@ -81,7 +88,7 @@ class PythonCodeExecutor:
                 status="INVALID_RESULT",
                 objective_value=None,
                 objective_match=False,
-                tolerance=tolerance,
+                tolerance=effective_tolerance,
                 stdout=stdout,
                 stderr=stderr,
                 error_message=f"Failed to parse result marker payload: {exc}",
@@ -106,7 +113,7 @@ class PythonCodeExecutor:
                 status_value = raw_status
         objective_match = False
         if objective_value is not None and reference.objective_value is not None:
-            objective_match = abs(objective_value - reference.objective_value) <= tolerance
+            objective_match = abs(objective_value - reference.objective_value) <= effective_tolerance
         success = status_value == "OPTIMAL" and objective_match
         return VerificationResult(
             success=success,
@@ -114,11 +121,22 @@ class PythonCodeExecutor:
             status=status_value,
             objective_value=objective_value,
             objective_match=objective_match,
-            tolerance=tolerance,
+            tolerance=effective_tolerance,
             stdout=stdout,
             stderr=stderr,
             error_message=None if success else "Objective mismatch or non-optimal solver status.",
         )
+
+    @staticmethod
+    def _effective_tolerance(reference_value: float | None, absolute_tolerance: float, relative_tolerance: float) -> float:
+        tolerance = max(0.0, float(absolute_tolerance))
+        if reference_value is None:
+            return tolerance
+        try:
+            reference_abs = abs(float(reference_value))
+        except (TypeError, ValueError):
+            return tolerance
+        return max(tolerance, reference_abs * max(0.0, float(relative_tolerance)))
 
     @staticmethod
     def _parse_result_payload(result_line: str) -> dict:

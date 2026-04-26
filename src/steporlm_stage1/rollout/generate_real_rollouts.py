@@ -45,6 +45,50 @@ def _accumulate_rollout_stats(rows: list[dict]) -> tuple[int, dict[str, int], li
     return trajectory_count, execution_statuses, teacher_scores
 
 
+def _row_has_success(row: dict[str, Any]) -> bool:
+    for traj in row.get("trajectories", []):
+        verification = traj.get("verification") or {}
+        if bool(verification.get("success")):
+            return True
+        if bool(verification.get("execution_ok")) and str(verification.get("status", "")).upper() == "OPTIMAL":
+            return True
+    return False
+
+
+def _count_rows_with_success(rows: list[dict]) -> int:
+    return sum(1 for row in rows if _row_has_success(row))
+
+
+def _zero_success_streak(rows: list[dict]) -> int:
+    streak = 0
+    for row in reversed(rows):
+        if _row_has_success(row):
+            break
+        streak += 1
+    return streak
+
+
+def _build_zero_success_alert(row: dict[str, Any], consecutive_zero_success: int) -> dict[str, Any]:
+    trajectories = row.get("trajectories", [])
+    return {
+        "problem_id": row.get("problem_id"),
+        "source_name": row.get("source_name"),
+        "consecutive_zero_success": consecutive_zero_success,
+        "num_trajectories": len(trajectories),
+        "trajectory_summaries": [
+            {
+                "trajectory_id": traj.get("trajectory_id"),
+                "status": (traj.get("verification") or {}).get("status"),
+                "success": bool((traj.get("verification") or {}).get("success")),
+                "execution_ok": bool((traj.get("verification") or {}).get("execution_ok")),
+                "objective_match": bool((traj.get("verification") or {}).get("objective_match")),
+                "response_preview": str(traj.get("response", ""))[:600],
+            }
+            for traj in trajectories
+        ],
+    }
+
+
 def _write_rollout_state(
     state_path: Path,
     *,
@@ -53,6 +97,8 @@ def _write_rollout_state(
     processed_problems: int,
     trajectory_count: int,
     solver_status_counts: dict[str, int],
+    problems_with_success: int,
+    consecutive_zero_success: int,
     last_problem_id: str | None,
     completed: bool,
 ) -> None:
@@ -66,6 +112,9 @@ def _write_rollout_state(
             "remaining_problems": max(0, total_problems - processed_problems),
             "num_trajectories": trajectory_count,
             "solver_status_counts": solver_status_counts,
+            "problems_with_success": problems_with_success,
+            "problem_success_rate": round(problems_with_success / processed_problems, 4) if processed_problems else 0.0,
+            "consecutive_zero_success": consecutive_zero_success,
             "last_problem_id": last_problem_id,
             "completed": completed,
         },
@@ -177,6 +226,7 @@ def run_rollout_generation(
         base_model_override=config.get("base_model_path"),
     )
     model.eval()
+    model.config.use_cache = bool(config.get("use_cache_for_generation", True))
     executor = PythonCodeExecutor(timeout_seconds=int(config.get("timeout_seconds", 20)))
     teacher = ZhipuTeacherEvaluator.from_env() if config.get("teacher_evaluation", False) else None
 
@@ -187,9 +237,19 @@ def run_rollout_generation(
     skipped_ids = skip_problem_ids or set()
     trajectory_count, execution_statuses, teacher_scores = _accumulate_rollout_stats(output_rows)
     processed_problems = len(output_rows)
+    problems_with_success = _count_rows_with_success(output_rows)
+    consecutive_zero_success = _zero_success_streak(output_rows)
     total_problems = len(dataset_rows) + len(output_rows)
     incremental_target = Path(incremental_output_path) if incremental_output_path is not None else None
     state_target = Path(state_path) if state_path is not None else None
+    zero_success_alert_target = (
+        incremental_target.parent / str(config.get("zero_success_alert_file", "zero_success_alerts.jsonl"))
+        if incremental_target is not None
+        else None
+    )
+    monitor_success_rate = bool(config.get("monitor_success_rate", True))
+    max_consecutive_zero_success = int(config.get("max_consecutive_zero_success", 3))
+    stop_on_consecutive_zero_success = bool(config.get("stop_on_consecutive_zero_success", True))
     last_problem_id: str | None = None
 
     if state_target is not None and incremental_target is not None:
@@ -200,6 +260,8 @@ def run_rollout_generation(
             processed_problems=processed_problems,
             trajectory_count=trajectory_count,
             solver_status_counts=execution_statuses,
+            problems_with_success=problems_with_success,
+            consecutive_zero_success=consecutive_zero_success,
             last_problem_id=last_problem_id,
             completed=processed_problems >= total_problems,
         )
@@ -219,7 +281,7 @@ def run_rollout_generation(
             if torch.cuda.is_available():
                 inputs = {key: value.to(model.device) for key, value in inputs.items()}
 
-            with torch.no_grad():
+            with torch.inference_mode():
                 generated = model.generate(
                     **inputs,
                     do_sample=config.get("do_sample", True),
@@ -229,6 +291,7 @@ def run_rollout_generation(
                     num_return_sequences=int(config.get("num_return_sequences", 3)),
                     pad_token_id=tokenizer.pad_token_id,
                     eos_token_id=tokenizer.eos_token_id,
+                    use_cache=bool(config.get("use_cache_for_generation", True)),
                 )
 
             prompt_len = inputs["input_ids"].shape[1]
@@ -273,6 +336,35 @@ def run_rollout_generation(
             output_rows.append(rollout_row)
             processed_problems += 1
             last_problem_id = str(row["problem_id"])
+            if _row_has_success(rollout_row):
+                problems_with_success += 1
+                consecutive_zero_success = 0
+            else:
+                consecutive_zero_success += 1
+                if monitor_success_rate and zero_success_alert_target is not None:
+                    _append_jsonl(
+                        zero_success_alert_target,
+                        [_build_zero_success_alert(rollout_row, consecutive_zero_success)],
+                    )
+                if monitor_success_rate and stop_on_consecutive_zero_success and consecutive_zero_success >= max_consecutive_zero_success:
+                    if state_target is not None and incremental_target is not None:
+                        _write_rollout_state(
+                            state_target,
+                            output_path=incremental_target,
+                            total_problems=total_problems,
+                            processed_problems=processed_problems,
+                            trajectory_count=trajectory_count,
+                            solver_status_counts=execution_statuses,
+                            problems_with_success=problems_with_success,
+                            consecutive_zero_success=consecutive_zero_success,
+                            last_problem_id=last_problem_id,
+                            completed=False,
+                        )
+                    raise RuntimeError(
+                        "Detected consecutive rollout problems without any successful trajectory. "
+                        f"Reached streak {consecutive_zero_success} at problem {last_problem_id}. "
+                        f"Inspect {zero_success_alert_target} and {incremental_target} before resuming."
+                    )
 
             if incremental_target is not None:
                 _append_jsonl(incremental_target, [rollout_row])
@@ -284,6 +376,8 @@ def run_rollout_generation(
                     processed_problems=processed_problems,
                     trajectory_count=trajectory_count,
                     solver_status_counts=execution_statuses,
+                    problems_with_success=problems_with_success,
+                    consecutive_zero_success=consecutive_zero_success,
                     last_problem_id=last_problem_id,
                     completed=processed_problems >= total_problems,
                 )
@@ -296,6 +390,8 @@ def run_rollout_generation(
                 processed_problems=processed_problems,
                 trajectory_count=trajectory_count,
                 solver_status_counts=execution_statuses,
+                problems_with_success=problems_with_success,
+                consecutive_zero_success=consecutive_zero_success,
                 last_problem_id=last_problem_id,
                 completed=False,
             )
@@ -305,6 +401,9 @@ def run_rollout_generation(
         "num_problems": len(output_rows),
         "num_trajectories": trajectory_count,
         "solver_status_counts": execution_statuses,
+        "problems_with_success": problems_with_success,
+        "problem_success_rate": round(problems_with_success / len(output_rows), 4) if output_rows else 0.0,
+        "consecutive_zero_success": consecutive_zero_success,
         "teacher_enabled": teacher is not None,
     }
     del model
@@ -360,6 +459,8 @@ def generate_real_rollouts_from_config(config: dict[str, Any], run_dir: str | Pa
                 processed_problems=len(rows),
                 trajectory_count=trajectory_count,
                 solver_status_counts=status_counts,
+                problems_with_success=_count_rows_with_success(rows),
+                consecutive_zero_success=_zero_success_streak(rows),
                 last_problem_id=(rows[-1]["problem_id"] if rows else None),
                 completed=True,
             )

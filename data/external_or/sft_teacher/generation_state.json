@@ -1,0 +1,12 @@
+{
+  "selected_sft_questions": 1047,
+  "processed_questions": 1047,
+  "accepted_samples": 671,
+  "attempted_trajectories": 2094,
+  "rejected_trajectories": 858,
+  "answer_stub_samples": 0,
+  "backfilled_relaxed_samples": 4,
+  "expected_trajectories_per_question": 2,
+  "trace_path": "/root/shared-nvme/ORLLM/data/external_or/sft_teacher/generation_trace.jsonl",
+  "train_path": "/root/shared-nvme/ORLLM/data/external_or/sft_teacher/train.jsonl"
+}

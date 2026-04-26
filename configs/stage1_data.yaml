@@ -14,8 +14,15 @@ splits:
 # the external reference answer before they enter data/external_or/sft_teacher.
 build_sft_trajectories: true
 sft_response_mode: teacher_verified
-max_sft_samples: 240
+max_sft_samples: 0
 resume_from_checkpoint: true
+sft_source_priority:
+  - MAMO Easy
+  - NL4Opt
+  - ComplexOR
+  - IndustryOR
+  - ReSocratic
+  - MAMO Complex
 
 teacher_backend: qwen_rag
 teacher_model_path: models/Qwen3-8B
@@ -38,14 +45,15 @@ rag_modeling_boost: 0.12
 rag_use_query_rewrite: false
 rag_fail_on_reranker_error: false
 
-genprm_evaluation: true
+genprm_evaluation: false
 genprm_min_correct_steps: 8
 genprm_require_all_correct: false
 genprm_max_tokens: 4200
 
-trajectories_per_question: 3
-trajectory_temperatures: [0.0, 0.18, 0.36]
+trajectories_per_question: 2
+trajectory_temperatures: [0.25, 0.25]
 trajectory_top_p: 0.9
 trajectory_repetition_penalty: 1.03
-trajectory_max_tokens: 2600
+trajectory_max_tokens: 2200
 timeout_seconds: 35
+verification_relative_tolerance: 0.05

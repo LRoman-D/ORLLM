@@ -1,0 +1,18 @@
+{
+  "num_pairs": 74,
+  "output_path": "runs/qwen3_8b/preferences/preferences_hard.jsonl",
+  "run_dir": "/root/shared-nvme/ORLLM/runs/qwen3_8b/preferences_hard_20260426_004332",
+  "rationales": {
+    "solver_success_beats_failure": 46,
+    "optimal_execution_beats_nonoptimal_or_failed": 28
+  },
+  "require_chosen_success": false,
+  "require_chosen_executable_optimal": true,
+  "require_chosen_process_pass": false,
+  "min_correct_steps": 8,
+  "min_weight": 0.9,
+  "skipped_for_unsuccessful_chosen": 0,
+  "skipped_for_nonoptimal_execution": 23,
+  "skipped_for_process": 0,
+  "skipped_for_low_weight": 252
+}

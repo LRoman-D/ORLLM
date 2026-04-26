@@ -188,6 +188,24 @@ def _hf_get_rows(dataset: str, config: str, split: str, row_limit: int = 0) -> l
     return rows
 
 
+def _load_cached_hf_rows(raw_root: Path, slug: str, row_limit: int = 0) -> list[dict[str, Any]]:
+    cache_path = raw_root / slug / "rows.jsonl"
+    if not cache_path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    with cache_path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            try:
+                rows.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+            if row_limit > 0 and len(rows) >= row_limit:
+                break
+    return rows
+
+
 def _prepare_hf_sources(root: Path, config: dict[str, Any], statuses: list[dict[str, str]]) -> list[dict[str, Any]]:
     prepared: list[dict[str, Any]] = []
     raw_root = ensure_dir(root / "raw")
@@ -196,18 +214,25 @@ def _prepare_hf_sources(root: Path, config: dict[str, Any], statuses: list[dict[
     answer_candidates = ("en_answer", "answer", "objective", "objective_value", "optimum", "optimal_value")
 
     for spec in HF_SOURCES:
+        source_dir = ensure_dir(raw_root / str(spec["slug"]))
         ok, detail = _check_hf_access(str(spec["dataset"]))
         if not ok:
-            _append_status(statuses, str(spec["name"]), "skipped", detail)
-            continue
-        try:
-            rows = _hf_get_rows(str(spec["dataset"]), str(spec["config"]), str(spec["split"]), row_limit)
-        except Exception as exc:  # noqa: BLE001
-            _append_status(statuses, str(spec["name"]), "skipped", f"download failed: {exc}")
-            continue
-
-        source_dir = ensure_dir(raw_root / str(spec["slug"]))
-        write_jsonl(source_dir / "rows.jsonl", rows)
+            rows = _load_cached_hf_rows(raw_root, str(spec["slug"]), row_limit)
+            if not rows:
+                _append_status(statuses, str(spec["name"]), "skipped", detail)
+                continue
+            _append_status(statuses, str(spec["name"]), "cached", f"{len(rows)} cached rows; access failed: {detail}")
+        else:
+            try:
+                rows = _hf_get_rows(str(spec["dataset"]), str(spec["config"]), str(spec["split"]), row_limit)
+            except Exception as exc:  # noqa: BLE001
+                rows = _load_cached_hf_rows(raw_root, str(spec["slug"]), row_limit)
+                if not rows:
+                    _append_status(statuses, str(spec["name"]), "skipped", f"download failed: {exc}")
+                    continue
+                _append_status(statuses, str(spec["name"]), "cached", f"{len(rows)} cached rows; download failed: {exc}")
+            else:
+                write_jsonl(source_dir / "rows.jsonl", rows)
 
         numeric_count = 0
         for row_idx, row in enumerate(rows):
@@ -239,7 +264,8 @@ def _prepare_hf_sources(root: Path, config: dict[str, Any], statuses: list[dict[
                     },
                 )
             )
-        _append_status(statuses, str(spec["name"]), "included", f"{numeric_count} numeric rows from {len(rows)} rows")
+        if not any(status["source"] == str(spec["name"]) for status in statuses):
+            _append_status(statuses, str(spec["name"]), "included", f"{numeric_count} numeric rows from {len(rows)} rows")
     return prepared
 
 
@@ -393,6 +419,134 @@ def _build_temperatures(config: dict[str, Any]) -> list[float]:
     return [round(start + idx * (stop - start) / (count - 1), 2) for idx in range(count)]
 
 
+def _prioritize_sft_rows(rows: list[dict[str, Any]], config: dict[str, Any]) -> list[dict[str, Any]]:
+    priority = config.get("sft_source_priority")
+    if not priority:
+        return rows
+    priority_rank = {str(source): rank for rank, source in enumerate(priority)}
+    default_rank = len(priority_rank)
+    return sorted(
+        rows,
+        key=lambda row: (
+            priority_rank.get(str(row.get("source_name")), default_rank),
+            str(row.get("problem_id", "")),
+        ),
+    )
+
+
+def _effective_objective_tolerance(reference_value: Any, absolute_tolerance: float, relative_tolerance: float) -> float:
+    tolerance = max(0.0, float(absolute_tolerance))
+    try:
+        reference_abs = abs(float(reference_value))
+    except (TypeError, ValueError):
+        return tolerance
+    return max(tolerance, reference_abs * max(0.0, float(relative_tolerance)))
+
+
+def _verification_matches_reference(
+    verification: dict[str, Any],
+    reference_value: Any,
+    *,
+    absolute_tolerance: float,
+    relative_tolerance: float,
+) -> bool:
+    if not verification.get("execution_ok"):
+        return False
+    if str(verification.get("status", "")).upper() != "OPTIMAL":
+        return False
+    objective_value = verification.get("objective_value")
+    if objective_value is None or reference_value is None:
+        return False
+    try:
+        objective = float(objective_value)
+        reference = float(reference_value)
+    except (TypeError, ValueError):
+        return False
+    tolerance = _effective_objective_tolerance(reference, absolute_tolerance, relative_tolerance)
+    return abs(objective - reference) <= tolerance
+
+
+def _relaxed_verification(
+    verification: dict[str, Any],
+    reference_value: Any,
+    *,
+    absolute_tolerance: float,
+    relative_tolerance: float,
+) -> dict[str, Any]:
+    relaxed = dict(verification)
+    relaxed["success"] = True
+    relaxed["objective_match"] = True
+    relaxed["tolerance"] = _effective_objective_tolerance(reference_value, absolute_tolerance, relative_tolerance)
+    relaxed["error_message"] = None
+    return relaxed
+
+
+def _backfill_relaxed_trace_accepts(
+    *,
+    selected_rows: list[dict[str, Any]],
+    trace_path: Path,
+    train_path: Path,
+    accepted_records: list[dict[str, Any]],
+    accepted_ids: set[str],
+    absolute_tolerance: float,
+    relative_tolerance: float,
+) -> int:
+    if relative_tolerance <= 0.0 or not trace_path.exists():
+        return 0
+    rows_by_id = {str(row["problem_id"]): row for row in selected_rows}
+    trace_by_id: dict[str, list[dict[str, Any]]] = {}
+    with trace_path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            try:
+                trace = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            problem_id = str(trace.get("problem_id", ""))
+            if problem_id:
+                trace_by_id.setdefault(problem_id, []).append(trace)
+
+    backfilled: list[dict[str, Any]] = []
+    for problem_id, row in rows_by_id.items():
+        if problem_id in accepted_ids:
+            continue
+        for trace in trace_by_id.get(problem_id, []):
+            verification = trace.get("verification") or {}
+            if not _verification_matches_reference(
+                verification,
+                row["reference_solution"].get("objective_value"),
+                absolute_tolerance=absolute_tolerance,
+                relative_tolerance=relative_tolerance,
+            ):
+                continue
+            chosen = {
+                **row,
+                "response": trace.get("response", ""),
+                "code": trace.get("code", ""),
+                "verification": _relaxed_verification(
+                    verification,
+                    row["reference_solution"].get("objective_value"),
+                    absolute_tolerance=absolute_tolerance,
+                    relative_tolerance=relative_tolerance,
+                ),
+                "process_verification": trace.get("process_verification") or {},
+                "generation_notes": {
+                    "generator_backend": "trace_backfill",
+                    "teacher_model": "existing_trace",
+                    "relaxed_relative_tolerance": relative_tolerance,
+                    "trajectory_index": trace.get("trajectory_index"),
+                },
+            }
+            backfilled.append(chosen)
+            accepted_records.append(chosen)
+            accepted_ids.add(problem_id)
+            break
+
+    _append_jsonl(train_path, backfilled)
+    return len(backfilled)
+
+
 def _answer_stub_response(row: dict[str, Any]) -> str:
     answer = row["reference_solution"]["objective_value"]
     return f"""<step>Problem Description
@@ -424,11 +578,15 @@ print("__STEPORLM_RESULT__=" + json.dumps(result, ensure_ascii=False))
 def _build_sft_records(config: dict[str, Any], sft_rows: list[dict[str, Any]], output_dir: Path) -> dict[str, Any]:
     teacher_mode = str(config.get("sft_response_mode", "teacher_verified")).lower()
     max_sft_samples = int(config.get("max_sft_samples", 0) or 0)
-    selected_rows = sft_rows[:max_sft_samples] if max_sft_samples > 0 else sft_rows
+    ordered_rows = _prioritize_sft_rows(sft_rows, config)
+    selected_rows = ordered_rows[:max_sft_samples] if max_sft_samples > 0 else ordered_rows
     trace_path = output_dir / "generation_trace.jsonl"
+    state_path = output_dir / "generation_state.json"
     train_path = output_dir / "train.jsonl"
     if trace_path.exists() and not bool(config.get("resume_from_checkpoint", False)):
         trace_path.unlink()
+    if state_path.exists() and not bool(config.get("resume_from_checkpoint", False)):
+        state_path.unlink()
     if train_path.exists() and not bool(config.get("resume_from_checkpoint", False)):
         train_path.unlink()
 
@@ -437,6 +595,37 @@ def _build_sft_records(config: dict[str, Any], sft_rows: list[dict[str, Any]], o
         with train_path.open("r", encoding="utf-8") as handle:
             accepted_records = [json.loads(line) for line in handle if line.strip()]
     accepted_ids = {row["problem_id"] for row in accepted_records}
+    verification_tolerance = float(config.get("verification_tolerance", 1e-4))
+    verification_relative_tolerance = float(config.get("verification_relative_tolerance", 0.0))
+    backfilled_relaxed = 0
+    if bool(config.get("resume_from_checkpoint", False)):
+        backfilled_relaxed = _backfill_relaxed_trace_accepts(
+            selected_rows=selected_rows,
+            trace_path=trace_path,
+            train_path=train_path,
+            accepted_records=accepted_records,
+            accepted_ids=accepted_ids,
+            absolute_tolerance=verification_tolerance,
+            relative_tolerance=verification_relative_tolerance,
+        )
+    processed_counts: Counter[str] = Counter()
+    historical_attempted = 0
+    historical_rejected = 0
+    if bool(config.get("resume_from_checkpoint", False)) and trace_path.exists():
+        with trace_path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                try:
+                    trace = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                problem_id = str(trace.get("problem_id", ""))
+                if problem_id:
+                    processed_counts[problem_id] += 1
+                historical_attempted += 1
+                if not ((trace.get("verification") or {}).get("success")):
+                    historical_rejected += 1
 
     generator = None
     if teacher_mode in {"teacher", "teacher_verified", "teacher_or_answer_stub"}:
@@ -452,12 +641,13 @@ def _build_sft_records(config: dict[str, Any], sft_rows: list[dict[str, Any]], o
     genprm_min_steps = int(config.get("genprm_min_correct_steps", 8))
     genprm_require_all = bool(config.get("genprm_require_all_correct", False))
 
-    attempted = 0
+    attempted = historical_attempted
     accepted = len(accepted_records)
-    rejected = 0
+    rejected = historical_rejected
     stubbed = 0
+    expected_trajectories = len(temperatures)
     for row in tqdm(selected_rows, desc="Generating SFT trajectories from external questions"):
-        if row["problem_id"] in accepted_ids:
+        if processed_counts.get(row["problem_id"], 0) >= expected_trajectories:
             continue
         reference_dict = row["reference_solution"]
         reference = ReferenceSolution(
@@ -473,14 +663,23 @@ def _build_sft_records(config: dict[str, Any], sft_rows: list[dict[str, Any]], o
                 template_name=row["template_name"],
                 temperatures=temperatures,
                 max_tokens=max_tokens,
+                answer_key=row.get("answer_key"),
+                answer_value=row.get("answer"),
             )
         elif teacher_mode == "answer_stub":
             responses = [_answer_stub_response(row)]
+        if len(responses) < expected_trajectories:
+            responses.extend([""] * (expected_trajectories - len(responses)))
 
-        for idx, response in enumerate(responses):
+        for idx, response in enumerate(responses[:expected_trajectories]):
             attempted += 1
             code = extract_python_code(response)
-            verification = executor.verify(code, reference)
+            verification = executor.verify(
+                code,
+                reference,
+                tolerance=verification_tolerance,
+                relative_tolerance=verification_relative_tolerance,
+            )
             process_verification: dict[str, Any] = {}
             if verification.success and genprm_enabled and generator is not None and hasattr(generator, "audit_trajectory"):
                 process_verification = generator.audit_trajectory(
@@ -493,6 +692,11 @@ def _build_sft_records(config: dict[str, Any], sft_rows: list[dict[str, Any]], o
             trace_row = {
                 "problem_id": row["problem_id"],
                 "trajectory_index": idx,
+                "source_name": row.get("source_name"),
+                "answer": row.get("answer"),
+                "answer_key": row.get("answer_key"),
+                "response": response,
+                "code": code,
                 "response_preview": response[:1200],
                 "code_preview": code[:1200],
                 "verification": verification.to_dict(),
@@ -504,7 +708,7 @@ def _build_sft_records(config: dict[str, Any], sft_rows: list[dict[str, Any]], o
                 min_correct_steps=genprm_min_steps,
                 require_all_correct=genprm_require_all,
             )
-            if verification.success and process_ok:
+            if chosen is None and verification.success and process_ok:
                 chosen = {
                     **row,
                     "response": response,
@@ -517,8 +721,8 @@ def _build_sft_records(config: dict[str, Any], sft_rows: list[dict[str, Any]], o
                         "temperature": temperatures[min(idx, len(temperatures) - 1)] if temperatures else None,
                     },
                 }
-                break
-            rejected += 1
+            elif not verification.success or not process_ok:
+                rejected += 1
 
         if chosen is None and allow_stub:
             response = _answer_stub_response(row)
@@ -547,6 +751,22 @@ def _build_sft_records(config: dict[str, Any], sft_rows: list[dict[str, Any]], o
             accepted_records.append(chosen)
             accepted_ids.add(chosen["problem_id"])
             _append_jsonl(train_path, [chosen])
+        processed_counts[row["problem_id"]] = expected_trajectories
+        write_json(
+            state_path,
+            {
+                "selected_sft_questions": len(selected_rows),
+                "processed_questions": sum(1 for item in selected_rows if processed_counts.get(item["problem_id"], 0) >= expected_trajectories),
+                "accepted_samples": accepted,
+                "attempted_trajectories": attempted,
+                "rejected_trajectories": rejected,
+                "answer_stub_samples": stubbed,
+                "backfilled_relaxed_samples": backfilled_relaxed,
+                "expected_trajectories_per_question": expected_trajectories,
+                "trace_path": str(trace_path),
+                "train_path": str(train_path),
+            },
+        )
 
     if generator is not None:
         del generator
@@ -561,9 +781,11 @@ def _build_sft_records(config: dict[str, Any], sft_rows: list[dict[str, Any]], o
         "attempted_trajectories": attempted,
         "rejected_trajectories": rejected,
         "answer_stub_samples": stubbed,
+        "backfilled_relaxed_samples": backfilled_relaxed,
         "response_mode": teacher_mode,
         "train_path": str(train_path),
         "trace_path": str(trace_path),
+        "state_path": str(state_path),
     }
     write_json(output_dir / "summary.json", summary)
     return summary

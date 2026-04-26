@@ -31,10 +31,10 @@ logs/
 nohup.out
 
 # Runtime outputs
-artifacts/
+artifacts/*
 outputs/
 results/
-runs/
+runs/*
 reports/
 checkpoints/
 
@@ -50,6 +50,50 @@ models/*
 *.pth
 *.ckpt
 *.safetensors
+
+# Preserve the reproducible Stage-1 experiment bundle while keeping
+# ad-hoc checkpoints, logs, and the raw Qwen3-8B base weights out of Git.
+!artifacts/qwen3-8b/
+!artifacts/qwen3-8b/sft-lora/
+!artifacts/qwen3-8b/sft-lora/**
+!artifacts/qwen3-8b/dpo-lora/
+!artifacts/qwen3-8b/dpo-lora/**
+!artifacts/qwen3-8b/dpo-lora-hard/
+!artifacts/qwen3-8b/dpo-lora-hard/**
+
+!data/external_or/
+!data/external_or/**
+data/external_or/raw/*/repo/
+!data/processed/
+!data/processed/**
+!data/rag/
+!data/rag/**
+
+!runs/qwen3_8b/
+runs/qwen3_8b/*
+!runs/qwen3_8b/rollouts/
+!runs/qwen3_8b/rollouts/real_rollouts.jsonl
+!runs/qwen3_8b/rollouts/rollout_state.json
+!runs/qwen3_8b/rollouts/zero_success_alerts.jsonl
+!runs/qwen3_8b/preferences/
+!runs/qwen3_8b/preferences/*.jsonl
+!runs/qwen3_8b/preferences_20260425_235540/
+!runs/qwen3_8b/preferences_20260425_235540/**
+!runs/qwen3_8b/preferences_hard_20260426_004332/
+!runs/qwen3_8b/preferences_hard_20260426_004332/**
+!runs/sft_qwen3_8b_5090_20260425_112123/
+!runs/sft_qwen3_8b_5090_20260425_112123/metrics/
+!runs/sft_qwen3_8b_5090_20260425_112123/metrics/**
+!runs/dpo_qwen3_8b_20260426_000021/
+!runs/dpo_qwen3_8b_20260426_000021/metrics/
+!runs/dpo_qwen3_8b_20260426_000021/metrics/**
+!runs/dpo_qwen3_8b_hard_20260426_004342/
+!runs/dpo_qwen3_8b_hard_20260426_004342/metrics/
+!runs/dpo_qwen3_8b_hard_20260426_004342/metrics/**
+!runs/rollout_qwen3_8b_20260425_123102/
+!runs/rollout_qwen3_8b_20260425_123102/**
+!runs/compare_qwen3_8b_hard_eval_20260426_112720/
+!runs/compare_qwen3_8b_hard_eval_20260426_112720/**
 
 # Caches
 .cache/

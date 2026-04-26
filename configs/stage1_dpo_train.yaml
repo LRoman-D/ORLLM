@@ -5,20 +5,29 @@ output_dir: artifacts/qwen3-8b/dpo-lora
 run_root: runs
 run_prefix: dpo_qwen3_8b
 
-max_prompt_length: 1024
-max_response_length: 1800
-learning_rate: 3.0e-5
+max_prompt_length: 1152
+max_response_length: 1600
+learning_rate: 2.0e-5
 num_train_epochs: 2
 per_device_train_batch_size: 1
-gradient_accumulation_steps: 8
-logging_steps: 5
-save_steps: 25
-beta: 0.2
+gradient_accumulation_steps: 4
+logging_steps: 1
+save_steps: 20
+save_total_limit: 4
+beta: 0.15
+warmup_steps: 8
+lr_scheduler_type: cosine
+max_grad_norm: 0.3
+optim: paged_adamw_8bit
+gradient_checkpointing: true
+gradient_checkpointing_kwargs:
+  use_reentrant: false
+resume_from_checkpoint: true
 
 load_in_4bit: true
 use_bf16_if_available: true
-ref_model_on_cpu: true
+ref_model_on_cpu: false
+ref_load_in_4bit: true
 lora_r: 16
 lora_alpha: 32
 lora_dropout: 0.05
-

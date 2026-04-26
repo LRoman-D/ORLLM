@@ -34,25 +34,6 @@ def build_rag_index_cmd(config_path: str = "configs/rag_index.yaml") -> None:
     typer.echo(summary)
 
 
-@app.command("evaluate-rag")
-def evaluate_rag_cmd(config_path: str = "configs/rag_eval.yaml") -> None:
-    from steporlm_stage1.rag.evaluation import evaluate_rag_retrieval
-
-    summary = evaluate_rag_retrieval(config_path)
-    typer.echo(summary)
-
-
-@app.command("summarize-sft-quality")
-def summarize_sft_quality_cmd(
-    dataset_dir: str = "data/external_or/sft_teacher",
-    output_path: str | None = None,
-) -> None:
-    from steporlm_stage1.rag.evaluation import summarize_sft_quality
-
-    summary = summarize_sft_quality(dataset_dir, output_path)
-    typer.echo(summary)
-
-
 @app.command("prepare-sft")
 def prepare_sft(
     input_dir: str = "data/external_or/sft_teacher",
@@ -95,12 +76,18 @@ def build_preferences(
         "--require-chosen-success/--allow-unsuccessful-chosen",
         help="Only keep preference pairs whose chosen trajectory already passed solver verification.",
     ),
+    require_chosen_executable_optimal: bool = typer.Option(
+        False,
+        "--require-chosen-executable-optimal/--allow-nonoptimal-executable-chosen",
+        help="Only keep preference pairs whose chosen trajectory executed and reached OPTIMAL status.",
+    ),
     require_chosen_process_pass: bool = typer.Option(
         False,
         "--require-chosen-process-pass/--allow-process-warnings",
         help="Only keep preference pairs whose chosen trajectory passed the GenPRM process threshold.",
     ),
     min_correct_steps: int = typer.Option(8, "--min-correct-steps", help="Minimum GenPRM-correct steps for chosen trajectories."),
+    min_weight: float = typer.Option(0.0, "--min-weight", help="Only keep preference pairs with weight at or above this threshold."),
 ) -> None:
     from steporlm_stage1.preference.build_pairs import build_preference_pairs
 
@@ -111,8 +98,10 @@ def build_preferences(
         run_prefix=run_prefix,
         timestamped=True,
         require_chosen_success=require_chosen_success,
+        require_chosen_executable_optimal=require_chosen_executable_optimal,
         require_chosen_process_pass=require_chosen_process_pass,
         min_correct_steps=min_correct_steps,
+        min_weight=min_weight,
     )
     typer.echo(summary)
 
@@ -142,14 +131,6 @@ def compare_models_cmd(config_path: str = "configs/stage1_compare.yaml") -> None
     from steporlm_stage1.evaluation.compare_models import compare_models
 
     summary = compare_models(config_path)
-    typer.echo(summary)
-
-
-@app.command("rag-ablation")
-def rag_ablation_cmd(config_path: str = "configs/rag_ablation_20_semantic_v2.yaml") -> None:
-    from steporlm_stage1.evaluation.rag_ablation import run_rag_ablation
-
-    summary = run_rag_ablation(config_path)
     typer.echo(summary)
 
 

@@ -9,8 +9,9 @@ ORTOOLS_STYLE_GUIDE = """OR-Tools coding standard:
 2. Use `solver = pywraplp.Solver.CreateSolver("GLOP")` only for continuous LP.
 3. Use `solver = pywraplp.Solver.CreateSolver("CBC_MIXED_INTEGER_PROGRAMMING")` for integer, binary, or mixed-integer models. Use SCIP only if explicitly requested and available.
 4. Create variables with the correct domains: `NumVar(lb, ub, name)`, `IntVar(lb, ub, name)`, or `BoolVar(name)`.
-5. Add constraints with `solver.Add(...)`; every natural-language capacity, balance, assignment, demand, linking, and logical condition must appear exactly once unless intentionally equivalent.
-6. Set the objective with `solver.Maximize(...)` or `solver.Minimize(...)`; never flip signs without explaining and preserving the reported objective.
+   Use `IntVar` with CBC for countable quantities such as people, patients, units, ads, trips, vehicles, machines, workers, shifts, hours, packages, products, or items unless the question explicitly permits fractional values.
+5. Add constraints with `solver.Add(linear_expression <= rhs)`, `solver.Add(linear_expression >= rhs)`, or `solver.Add(linear_expression == rhs)`; every natural-language capacity, balance, assignment, demand, linking, and logical condition must appear exactly once unless intentionally equivalent. Never call `solver.Constraint(expression, ...)`, `solver.SumConstraint(...)`, or `constraint.SetCoefficient(...)` with anything except a single variable object.
+6. Set the objective with `solver.Maximize(linear_expression)` or `solver.Minimize(linear_expression)`; never call `objective.Minimize()` or `objective.Maximize()`, and never flip signs without explaining and preserving the reported answer.
 7. Solve with `status = solver.Solve()` exactly once after the full model is built.
 8. Map statuses explicitly: OPTIMAL, FEASIBLE, INFEASIBLE, UNBOUNDED, NOT_SOLVED, ABNORMAL.
 9. Define `result = {"status": status_name, "objective_value": objective_value}` and print exactly one final marker with `__STEPORLM_RESULT__=`.
@@ -35,6 +36,7 @@ Modeling requirements:
 - Do not silently simplify away constraints.
 - Separate modeling semantics from implementation details.
 - If the model is linear, say so. If nonlinear terms appear, identify and linearize them before coding.
+- OR-Tools linear_solver cannot multiply two decision variables. If the problem contains products of decisions, introduce auxiliary variables and linear constraints, or choose a valid OR-Tools modeling API that supports the relationship.
 - The Python code must implement the final model exactly.
 
 {ORTOOLS_STYLE_GUIDE}
@@ -78,6 +80,7 @@ def _build_rollout_domain_hint(template_name: str) -> str:
     hints = {
         "external_or": (
             "Use the variable domain stated or implied by the external benchmark question. "
+            "Treat countable real-world quantities as integers even if the word integer is omitted. "
             "The reference value may be the optimal objective or the requested optimal decision value; "
             "put the numeric benchmark answer in `objective_value`."
         ),

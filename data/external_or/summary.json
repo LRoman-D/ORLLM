@@ -1,0 +1,72 @@
+{
+  "external_data_dir": "/root/shared-nvme/ORLLM/data/external_or",
+  "num_questions": 1745,
+  "source_statuses": [
+    {
+      "source": "NL4Opt",
+      "status": "included",
+      "detail": "223 numeric rows from 245 rows"
+    },
+    {
+      "source": "MAMO Easy",
+      "status": "included",
+      "detail": "652 numeric rows from 652 rows"
+    },
+    {
+      "source": "MAMO Complex",
+      "status": "included",
+      "detail": "211 numeric rows from 211 rows"
+    },
+    {
+      "source": "NLP4LP",
+      "status": "skipped",
+      "detail": "{\"error\":\"The dataset does not exist, or is not accessible without authentication (private or gated). Please check the spelling of the dataset name or retry with authentication.\"}"
+    },
+    {
+      "source": "IndustryOR",
+      "status": "included",
+      "detail": "100 numeric rows from 100 rows"
+    },
+    {
+      "source": "ComplexOR",
+      "status": "included",
+      "detail": "18 rows"
+    },
+    {
+      "source": "ReSocratic",
+      "status": "included",
+      "detail": "605 numeric rows from 605 rows"
+    }
+  ],
+  "source_counts": {
+    "NL4Opt": 223,
+    "MAMO Easy": 652,
+    "MAMO Complex": 211,
+    "IndustryOR": 100,
+    "ComplexOR": 18,
+    "ReSocratic": 541
+  },
+  "splits": {
+    "sft": 1047,
+    "rollout": 349,
+    "eval": 349
+  },
+  "prepared_questions": "/root/shared-nvme/ORLLM/data/external_or/prepared/all_questions.jsonl",
+  "split_paths": {
+    "sft": "/root/shared-nvme/ORLLM/data/external_or/splits/sft_questions.jsonl",
+    "rollout": "/root/shared-nvme/ORLLM/data/external_or/splits/rollout_questions.jsonl",
+    "eval": "/root/shared-nvme/ORLLM/data/external_or/splits/eval_questions.jsonl"
+  },
+  "sft_source": {
+    "selected_sft_questions": 1047,
+    "accepted_samples": 671,
+    "attempted_trajectories": 2094,
+    "rejected_trajectories": 858,
+    "answer_stub_samples": 0,
+    "backfilled_relaxed_samples": 4,
+    "response_mode": "teacher_verified",
+    "train_path": "/root/shared-nvme/ORLLM/data/external_or/sft_teacher/train.jsonl",
+    "trace_path": "/root/shared-nvme/ORLLM/data/external_or/sft_teacher/generation_trace.jsonl",
+    "state_path": "/root/shared-nvme/ORLLM/data/external_or/sft_teacher/generation_state.json"
+  }
+}

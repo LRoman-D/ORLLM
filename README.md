@@ -10,7 +10,7 @@ This repo is a compact StepORLM-style loop for operations-research modeling:
 6. Train DPO.
 7. Evaluate on the held-out external OR split.
 
-The teacher remains frozen. RAG books and retrieval logic are preserved under `referencebooks/` and `src/steporlm_stage1/rag/`.
+The teacher remains frozen. RAG books, the built retrieval index, and retrieval logic are preserved under `referencebooks/`, `data/rag/`, and `src/steporlm_stage1/rag/`. The Qwen3-8B base model is intentionally not stored in Git; place or download it at `models/Qwen3-8B` before running training or evaluation.
 
 ## Layout
 
@@ -20,6 +20,7 @@ The teacher remains frozen. RAG books and retrieval logic are preserved under `r
 | `src/steporlm_stage1/quality/` | GenPRM prompt, parser, and process scoring |
 | `src/steporlm_stage1/solvers/` | Internal OR-Tools status/result helpers |
 | `docs/ortools_style_guide.md` | OR-Tools coding standard used by prompts |
+| `docs/model_comparison_summary.md` | Interpretation of the saved three-model comparison run |
 | `configs/` | Canonical Qwen3-8B configs for the full loop |
 | `data/external_or/` | External raw questions, SFT/rollout/eval question splits, and SFT teacher trajectories |
 | `data/processed/` | Converted SFT/DPO training datasets |
@@ -34,11 +35,7 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-Prepare the base/teacher model at `models/Qwen3-8B`. A helper can run the download safely in tmux:
-
-```bash
-bash scripts/download_qwen3_8b_tmux.sh
-```
+Prepare the base/teacher model at `models/Qwen3-8B`. The released repository stores only the SFT/DPO LoRA adapters, not the original 8B base weights.
 
 Build the RAG index once:
 
@@ -70,3 +67,5 @@ bash scripts/run_qwen3_8b_pipeline.sh
 ```
 
 Use `scripts/report_generation_stats.py` to inspect data-generation progress.
+
+The saved three-model comparison is summarized in `docs/model_comparison_summary.md`.

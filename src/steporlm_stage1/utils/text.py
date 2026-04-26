@@ -84,9 +84,16 @@ def _repair_ortools_patterns(text: str) -> str:
     repaired = re.sub(r"solver\.Value\(([^)]+)\)", r"\1.solution_value()", repaired)
     repaired = re.sub(r"solver\.status_name\(\)", "_steporlm_status_name(status)", repaired)
     repaired = re.sub(r"solver\.StatusName\(([^)]+)\)", r"_steporlm_status_name(\1)", repaired)
+    repaired = re.sub(r"\b([A-Za-z_][A-Za-z0-9_]*)\.solution\(\)", r"\1.solution_value()", repaired)
+    repaired = re.sub(r"\b([A-Za-z_][A-Za-z0-9_]*)\.solution\b(?!_)", r"\1.solution_value()", repaired)
     repaired = re.sub(r"\bval\.value\(\)", "val.solution_value()", repaired)
     repaired = re.sub(r"\bvar\.value\(\)", "var.solution_value()", repaired)
     repaired = re.sub(r"\bx\.value\(\)", "x.solution_value()", repaired)
+    repaired = repaired.replace("objective.Minimize()", "objective.SetMinimization()")
+    repaired = repaired.replace("objective.Maximize()", "objective.SetMaximization()")
+    repaired = repaired.replace("objective.SetMinObjective()", "objective.SetMinimization()")
+    repaired = repaired.replace("objective.SetMaxObjective()", "objective.SetMaximization()")
+    repaired = repaired.replace("math.round(", "round(")
     repaired = re.sub(r"\bsolver\.Dispose\(\)", "", repaired)
     if "solver.Solve()" not in repaired and ("solver.Maximize(" in repaired or "solver.Minimize(" in repaired):
         insert_patterns = [r"(?m)^status\s*=", r"(?m)^status_name\s*=", r"(?m)^result\s*="]

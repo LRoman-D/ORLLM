@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "output_path": "/root/shared-nvme/ORLLM/runs/qwen3_8b/rollouts/real_rollouts.jsonl",
+  "total_problems": 349,
+  "processed_problems": 349,
+  "remaining_problems": 0,
+  "num_trajectories": 1047,
+  "solver_status_counts": {
+    "OPTIMAL": 914,
+    "FEASIBLE": 24,
+    "NOT_SOLVED": 17,
+    "RUNTIME_ERROR": 81,
+    "None": 7,
+    "INFEASIBLE": 3,
+    "MISSING_RESULT": 1
+  },
+  "problems_with_success": 326,
+  "problem_success_rate": 0.9341,
+  "consecutive_zero_success": 0,
+  "last_problem_id": "resocratic-optibench-00564",
+  "completed": true
+}

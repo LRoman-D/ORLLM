@@ -1,0 +1,37 @@
+run_root: runs
+run_prefix: compare_qwen3_8b_hard_eval
+teacher_evaluation: false
+
+benchmark:
+  dataset_path: data/external_or/splits/eval_questions.jsonl
+  seed: 2026
+  target_questions: 100
+  selection_mode: first
+
+rollout:
+  num_return_sequences: 2
+  max_new_tokens: 1200
+  temperature: 0.45
+  top_p: 0.9
+  do_sample: true
+  load_in_4bit: true
+  use_cache_for_generation: true
+  timeout_seconds: 25
+  seed: 2026
+  genprm_evaluation: false
+  stop_on_consecutive_zero_success: false
+
+models:
+  - name: qwen3_base
+    model_path: models/Qwen3-8B
+    is_adapter: false
+
+  - name: qwen3_sft
+    model_path: artifacts/qwen3-8b/sft-lora
+    base_model_path: models/Qwen3-8B
+    is_adapter: true
+
+  - name: qwen3_dpo_hard
+    model_path: artifacts/qwen3-8b/dpo-lora-hard
+    base_model_path: models/Qwen3-8B
+    is_adapter: true

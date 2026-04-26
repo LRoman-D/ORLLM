@@ -6,19 +6,24 @@ output_path: runs/qwen3_8b/rollouts/real_rollouts.jsonl
 run_root: runs
 run_prefix: rollout_qwen3_8b
 
-num_return_sequences: 6
-max_new_tokens: 2200
-temperature: 0.35
-top_p: 0.92
+num_return_sequences: 3
+max_new_tokens: 1792
+temperature: 0.55
+top_p: 0.9
 do_sample: true
 load_in_4bit: true
+use_cache_for_generation: true
 timeout_seconds: 35
 seed: 2026
 teacher_evaluation: false
 resume_from_checkpoint: true
 state_file: rollout_state.json
+monitor_success_rate: true
+max_consecutive_zero_success: 3
+stop_on_consecutive_zero_success: true
+zero_success_alert_file: zero_success_alerts.jsonl
 
-genprm_evaluation: true
+genprm_evaluation: false
 genprm_min_correct_steps: 8
 genprm_require_all_correct: false
 genprm_max_tokens: 4200

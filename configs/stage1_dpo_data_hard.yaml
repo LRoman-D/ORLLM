@@ -1,0 +1,7 @@
+preference_path: runs/qwen3_8b/preferences/preferences_hard.jsonl
+output_dir: data/processed/qwen3_dpo_hard
+run_root: runs
+run_prefix: dpo_data_qwen3_8b_hard
+max_pairs: 0
+shuffle_before_limit: true
+sampling_seed: 2026

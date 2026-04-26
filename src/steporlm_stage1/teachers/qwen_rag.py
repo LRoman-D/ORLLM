@@ -191,12 +191,26 @@ class QwenRagTeacherGenerator:
         template_name: str,
         temperatures: list[float],
         max_tokens: int = 2000,
+        answer_key: str | None = None,
+        answer_value: float | None = None,
     ) -> list[str]:
         context = self._retrieve_context(f"{template_name}\n{question}", template_name=template_name)
-        user_prompt = self._build_rag_trajectory_prompt(question=question, template_name=template_name, context=context)
+        user_prompt = self._build_rag_trajectory_prompt(
+            question=question,
+            template_name=template_name,
+            context=context,
+            answer_key=answer_key,
+            answer_value=answer_value,
+        )
         trajectories = []
-        for temperature in temperatures:
-            content = self._chat(
+        pending = list(temperatures)
+        while pending:
+            temperature = pending.pop(0)
+            same_temperature_count = 1
+            while pending and pending[0] == temperature and temperature > 0.0:
+                pending.pop(0)
+                same_temperature_count += 1
+            contents = self._chat_many(
                 [
                     {"role": "system", "content": RAG_TRAJECTORY_SYSTEM_PROMPT},
                     {"role": "user", "content": user_prompt},
@@ -205,10 +219,12 @@ class QwenRagTeacherGenerator:
                 max_new_tokens=max_tokens,
                 top_p=self.trajectory_top_p,
                 repetition_penalty=self.trajectory_repetition_penalty,
+                num_return_sequences=same_temperature_count,
             )
-            cleaned = content.strip()
-            if cleaned:
-                trajectories.append(cleaned)
+            for content in contents:
+                cleaned = content.strip()
+                if cleaned:
+                    trajectories.append(cleaned)
         return trajectories
 
     def audit_trajectory(
@@ -345,8 +361,29 @@ class QwenRagTeacherGenerator:
         return boosted
 
     @staticmethod
-    def _build_rag_trajectory_prompt(question: str, template_name: str, context: str) -> str:
+    def _build_rag_trajectory_prompt(
+        question: str,
+        template_name: str,
+        context: str,
+        answer_key: str | None = None,
+        answer_value: float | None = None,
+    ) -> str:
         solver_hint = build_solver_hint(template_name)
+        answer_target = ""
+        if answer_key:
+            integer_note = ""
+            if answer_value is not None and abs(float(answer_value) - round(float(answer_value))) <= 1e-9:
+                integer_note = """
+The benchmark target is integer-valued. If the model variables count real things such as ads, trips, people, vehicles, products, shifts, hours, packages, or units, use integer variables with CBC unless the question explicitly allows fractional values.
+"""
+            answer_target = f"""
+【Benchmark answer target】
+The verifier compares the JSON field `objective_value` against the benchmark answer field `{answer_key}`.
+If `{answer_key}` names a decision variable or requested quantity rather than the objective function, solve the model normally and report that requested numeric quantity in `objective_value`.
+For targets like "The number of ..." or "The quantity of ...", `objective_value` must be the solved value of that variable, not `solver.Objective().Value()`.
+Do not hard-code the answer; compute it from solver variables or the solved objective.
+{integer_note}
+"""
         tsp_api_guard = ""
         if str(template_name).strip().lower() == "tsp":
             tsp_api_guard = """
@@ -367,6 +404,7 @@ Preferred solver guidance:
 
 【参考资料】
 {context}
+{answer_target}
 
 【要求】
 基于参考资料回答问题，如涉及建模请给出：
@@ -376,6 +414,9 @@ Preferred solver guidance:
 - 代码必须包含 import json，并输出唯一结果标记：__STEPORLM_RESULT__=
 - 严禁改动题目中的任何数字、上/下界、容量、成本、需求等参数
 - 参考资料仅用于建模启发，不要照抄其中变量名/索引集合；以当前题目定义为准
+- 若变量表示人数、病人、产品件数、广告次数、行程、车辆、机器、工人、班次、小时、包装、商品或其他可数数量，除非题目明确允许小数，否则必须用 `IntVar` 和 CBC
+- 禁止使用 `solver.Constraint(...)`、`solver.SumConstraint(...)`、`objective.Minimize()`、`objective.Maximize()`；约束一律写成 `solver.Add(expr <= rhs)` / `solver.Add(expr >= rhs)` / `solver.Add(expr == rhs)`
+- 禁止将两个 OR-Tools 决策变量直接相乘；如需表达乘积，必须线性化或重构模型
 - 必须输出 9 个 `<step>...</step>` 推理步骤，最后仅输出一个完整 Python 代码块
 - 代码必须遵守以下 OR-Tools 规范：
 {ORTOOLS_STYLE_GUIDE}
@@ -393,6 +434,25 @@ Produce the full 9-step trajectory and executable OR-Tools Python solver now.
         top_p: float = 0.9,
         repetition_penalty: float = 1.0,
     ) -> str:
+        return self._chat_many(
+            messages,
+            temperature=temperature,
+            max_new_tokens=max_new_tokens,
+            top_p=top_p,
+            repetition_penalty=repetition_penalty,
+            num_return_sequences=1,
+        )[0]
+
+    def _chat_many(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        temperature: float,
+        max_new_tokens: int,
+        top_p: float = 0.9,
+        repetition_penalty: float = 1.0,
+        num_return_sequences: int = 1,
+    ) -> list[str]:
         try:
             prompt_text = self.tokenizer.apply_chat_template(
                 messages,
@@ -409,7 +469,7 @@ Produce the full 9-step trajectory and executable OR-Tools Python solver now.
         generation_kwargs = {
             "do_sample": do_sample,
             "max_new_tokens": max_new_tokens,
-            "num_return_sequences": 1,
+            "num_return_sequences": int(num_return_sequences),
             "pad_token_id": self.tokenizer.pad_token_id,
             "eos_token_id": self.tokenizer.eos_token_id,
         }
@@ -418,13 +478,16 @@ Produce the full 9-step trajectory and executable OR-Tools Python solver now.
         if do_sample:
             generation_kwargs["temperature"] = temperature
             generation_kwargs["top_p"] = float(top_p)
-        with torch.no_grad():
+        with torch.inference_mode():
             generated = self.model.generate(
                 **inputs,
                 **generation_kwargs,
             )
         prompt_len = inputs["input_ids"].shape[1]
-        return self.tokenizer.decode(generated[0][prompt_len:], skip_special_tokens=True).strip()
+        return [
+            self.tokenizer.decode(generated[idx][prompt_len:], skip_special_tokens=True).strip()
+            for idx in range(generated.shape[0])
+        ]
 
     @staticmethod
     def _parse_json_object(text: str) -> dict[str, Any]:

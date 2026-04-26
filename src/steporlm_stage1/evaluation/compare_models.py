@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from pathlib import Path
 
-from steporlm_stage1.evaluation.metrics import summarize_best_trajectories
+from steporlm_stage1.evaluation.metrics import summarize_rollout_set
 from steporlm_stage1.rollout.generate_real_rollouts import run_rollout_generation
 from steporlm_stage1.utils.io import load_yaml_config, read_jsonl, write_json, write_jsonl
 from steporlm_stage1.utils.plots import save_comparison_dashboard
@@ -13,13 +13,17 @@ from steporlm_stage1.utils.run_dirs import create_timestamped_run_dir
 def _load_comparison_questions(config: dict, output_path: Path) -> tuple[list[dict], dict]:
     rng = random.Random(int(config.get("seed", 2026)))
     target_questions = int(config.get("target_questions", 50))
+    selection_mode = str(config.get("selection_mode", "random")).lower()
     dataset_path = config.get("dataset_path") or config.get("eval_dataset_path")
     if not dataset_path:
         raise ValueError("benchmark.dataset_path must point to external eval questions.")
 
     questions = read_jsonl(dataset_path)
     if target_questions > 0 and len(questions) > target_questions:
-        questions = rng.sample(questions, target_questions)
+        if selection_mode == "first":
+            questions = questions[:target_questions]
+        else:
+            questions = rng.sample(questions, target_questions)
     for row in questions:
         row.setdefault("template_name", "external_or")
 
@@ -31,6 +35,7 @@ def _load_comparison_questions(config: dict, output_path: Path) -> tuple[list[di
     summary = {
         "num_questions": len(questions),
         "dataset_path": str(dataset_path),
+        "selection_mode": selection_mode,
         "source_distribution": source_counter,
         "output_path": str(output_path),
     }
@@ -54,12 +59,25 @@ def compare_models(config_path: str | Path) -> dict:
         rollout_config["progress_label"] = f"Evaluating {model_cfg['name']}"
 
         rollouts, _, _ = run_rollout_generation(rollout_config, rows=benchmark_rows)
-        predictions, metrics, _teacher_scores = summarize_best_trajectories(rollouts)
+        predictions, details, metrics, _teacher_scores = summarize_rollout_set(rollouts)
         metrics["model_name"] = model_cfg["name"]
+        metrics["num_return_sequences"] = int(rollout_config.get("num_return_sequences", 1))
         model_summaries.append(metrics)
+        write_jsonl(run_dir / f"{model_cfg['name']}_rollouts.jsonl", rollouts)
+        write_jsonl(run_dir / f"{model_cfg['name']}_predictions.jsonl", predictions)
+        write_jsonl(run_dir / f"{model_cfg['name']}_details.jsonl", details)
+        write_json(run_dir / f"{model_cfg['name']}_metrics.json", metrics)
 
-        for row in predictions:
+        for row in details:
             comparison_rows.append({"model_name": model_cfg["name"], **row})
+
+        partial_summary = {
+            "benchmark": benchmark_summary,
+            "models": model_summaries,
+            "run_dir": str(run_dir),
+        }
+        write_json(run_dir / "comparison_summary.json", partial_summary)
+        write_jsonl(run_dir / "comparison_details.jsonl", comparison_rows)
 
     save_comparison_dashboard(model_summaries, run_dir / "comparison_dashboard.png")
     summary = {

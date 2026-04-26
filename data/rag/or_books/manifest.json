@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "source_dir": "referencebooks",
+  "output_dir": "/root/shared-nvme/ORLLM/data/rag/or_books",
+  "num_source_files": 6,
+  "num_supported_files": 5,
+  "num_chunks": 3884,
+  "avg_chunk_tokens": 218.3538,
+  "chunk_target_words": 450,
+  "chunk_min_words": 300,
+  "chunk_max_words": 600,
+  "overlap_ratio": 0.15,
+  "min_chunk_chars": 200,
+  "unsupported_files": [
+    "referencebooks/Mit Press - Introduction To Algorithms 2Nd Edition Incl Exercises Edition.chm"
+  ],
+  "skipped_files": []
+}

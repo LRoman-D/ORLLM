@@ -1,0 +1,21 @@
+{
+  "num_examples": 100,
+  "avg_num_trajectories": 2.0,
+  "execution_rate": 0.01,
+  "feasible_rate": 0.0,
+  "optimal_execution_at_1": 0.0,
+  "pass_at_1": 0.0,
+  "execution_at_k": 0.01,
+  "optimal_execution_at_k": 0.0,
+  "pass_at_k": 0.0,
+  "mean_abs_objective_gap": 0.0,
+  "mean_best_abs_objective_gap": 0.0,
+  "teacher_mean_score": 0.0,
+  "teacher_var_score": 0.0,
+  "genprm_mean_score": 0.0,
+  "genprm_pass_rate": 0.0,
+  "avg_successful_trajectories": 0.0,
+  "avg_optimal_trajectories": 0.0,
+  "model_name": "qwen3_base",
+  "num_return_sequences": 2
+}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,7 @@ from torch.nn.utils.rnn import pad_sequence
 from transformers import Trainer
 
 from steporlm_stage1.utils.io import ensure_dir, load_yaml_config
+from steporlm_stage1.utils.paths import map_repo_relative_path
 from steporlm_stage1.utils.modeling import load_causal_lm, load_tokenizer
 from steporlm_stage1.utils.training_reports import (
     prepare_training_artifact_dirs,
@@ -29,6 +31,71 @@ def _tokenize_pair(tokenizer, prompt_messages, chosen: str, rejected: str, max_p
         "chosen_ids": chosen_ids,
         "rejected_ids": rejected_ids,
     }
+
+
+def _checkpoint_step(path: Path) -> int:
+    try:
+        return int(path.name.rsplit("-", 1)[1])
+    except (IndexError, ValueError):
+        return -1
+
+
+def _path_from_config(value: str | Path) -> Path:
+    path = Path(value)
+    return path if path.is_absolute() else map_repo_relative_path(path)
+
+
+def _checkpoint_dirs_under(root: Path) -> list[Path]:
+    if root.name.startswith("checkpoint-") and root.is_dir():
+        return [root]
+    if not root.exists():
+        return []
+    return [path for path in root.glob("checkpoint-*") if path.is_dir()]
+
+
+def _find_latest_checkpoint(config: dict, current_checkpoints_dir: Path) -> Path | None:
+    resume_value = config.get("resume_from_checkpoint", False)
+    if not resume_value:
+        return None
+
+    if isinstance(resume_value, str) and resume_value.lower() not in {"auto", "true", "yes"}:
+        checkpoint = _path_from_config(resume_value)
+        return checkpoint if checkpoint.exists() else None
+
+    roots: list[Path] = []
+    if config.get("resume_checkpoint_dir"):
+        roots.append(_path_from_config(config["resume_checkpoint_dir"]))
+
+    run_root_value = config.get("run_root")
+    run_prefix = str(config.get("run_prefix", "")).strip()
+    if run_root_value and run_prefix:
+        run_root = _path_from_config(run_root_value)
+        roots.extend(path for path in run_root.glob(f"{run_prefix}*/weights/checkpoints") if path.is_dir())
+
+    output_dir = Path(config["output_dir"])
+    roots.extend([current_checkpoints_dir, output_dir])
+
+    checkpoints: dict[Path, Path] = {}
+    for root in roots:
+        for checkpoint in _checkpoint_dirs_under(root):
+            checkpoints[checkpoint.resolve()] = checkpoint
+    if not checkpoints:
+        return None
+
+    return max(checkpoints.values(), key=lambda path: (_checkpoint_step(path), path.stat().st_mtime))
+
+
+def _replace_dir(target_path: str | Path, source_path: str | Path) -> Path:
+    target = Path(target_path)
+    source = Path(source_path)
+    if target.exists() or target.is_symlink():
+        if target.is_symlink() or target.is_file():
+            target.unlink()
+        else:
+            shutil.rmtree(target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(source, target)
+    return target
 
 
 @dataclass
@@ -225,9 +292,10 @@ def train_weighted_dpo(config_path: str | Path) -> dict:
         adapter_is_trainable=True,
         base_model_override=config["model_name_or_path"],
     )
+    policy_model.config.use_cache = False
     ref_model = load_causal_lm(
         config["sft_adapter_path"],
-        load_in_4bit=False,
+        load_in_4bit=config.get("ref_load_in_4bit", False),
         use_bf16_if_available=False if ref_model_on_cpu else config.get("use_bf16_if_available", True),
         is_adapter=True,
         adapter_is_trainable=False,
@@ -235,23 +303,38 @@ def train_weighted_dpo(config_path: str | Path) -> dict:
         dtype_override=torch.float32 if ref_model_on_cpu else None,
         base_model_override=config["model_name_or_path"],
     )
+    ref_model.config.use_cache = True
 
     from transformers import TrainingArguments
 
-    training_args = TrainingArguments(
-        output_dir=str(artifact_dirs["checkpoints_dir"]),
-        per_device_train_batch_size=config["per_device_train_batch_size"],
-        gradient_accumulation_steps=config["gradient_accumulation_steps"],
-        learning_rate=config["learning_rate"],
-        num_train_epochs=config["num_train_epochs"],
-        logging_steps=config["logging_steps"],
-        save_steps=config["save_steps"],
-        bf16=torch.cuda.is_available() and config.get("use_bf16_if_available", True) and torch.cuda.is_bf16_supported(),
-        fp16=torch.cuda.is_available() and not torch.cuda.is_bf16_supported(),
-        gradient_checkpointing=True,
-        report_to="none",
-        remove_unused_columns=False,
-    )
+    training_kwargs = {
+        "output_dir": str(artifact_dirs["checkpoints_dir"]),
+        "per_device_train_batch_size": config["per_device_train_batch_size"],
+        "gradient_accumulation_steps": config["gradient_accumulation_steps"],
+        "learning_rate": config["learning_rate"],
+        "num_train_epochs": config["num_train_epochs"],
+        "logging_steps": config["logging_steps"],
+        "save_steps": config["save_steps"],
+        "bf16": torch.cuda.is_available() and config.get("use_bf16_if_available", True) and torch.cuda.is_bf16_supported(),
+        "fp16": torch.cuda.is_available() and not torch.cuda.is_bf16_supported(),
+        "gradient_checkpointing": config.get("gradient_checkpointing", True),
+        "report_to": config.get("report_to", "none"),
+        "remove_unused_columns": False,
+        "logging_first_step": config.get("logging_first_step", True),
+    }
+    for key in [
+        "max_steps",
+        "save_total_limit",
+        "warmup_steps",
+        "warmup_ratio",
+        "lr_scheduler_type",
+        "max_grad_norm",
+        "optim",
+        "gradient_checkpointing_kwargs",
+    ]:
+        if key in config:
+            training_kwargs[key] = config[key]
+    training_args = TrainingArguments(**training_kwargs)
     trainer = WeightedDPOTrainer(
         model=policy_model,
         args=training_args,
@@ -260,13 +343,12 @@ def train_weighted_dpo(config_path: str | Path) -> dict:
         beta=config["beta"],
         ref_model=ref_model,
     )
-    train_result = trainer.train()
+    resume_checkpoint = _find_latest_checkpoint(config, artifact_dirs["checkpoints_dir"])
+    train_result = trainer.train(resume_from_checkpoint=str(resume_checkpoint) if resume_checkpoint else None)
     final_dir = artifact_dirs["final_dir"]
-    latest_dir = ensure_dir(config["output_dir"])
     trainer.save_model(str(final_dir))
     tokenizer.save_pretrained(str(final_dir))
-    trainer.save_model(str(latest_dir))
-    tokenizer.save_pretrained(str(latest_dir))
+    latest_dir = _replace_dir(config["output_dir"], final_dir)
 
     summary = summarize_training_history(
         trainer.state.log_history,
@@ -281,6 +363,7 @@ def train_weighted_dpo(config_path: str | Path) -> dict:
             "latest_model_dir": str(latest_dir),
             "metrics_dir": str(artifact_dirs["metrics_dir"]),
             "checkpoints_dir": str(artifact_dirs["checkpoints_dir"]),
+            "resumed_from_checkpoint": str(resume_checkpoint) if resume_checkpoint else None,
         }
     )
     report_paths = write_training_artifacts(

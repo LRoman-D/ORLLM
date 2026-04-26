@@ -44,6 +44,10 @@ The Python code must:
 - import every module it uses explicitly
 - not use helper functions unless they are fully defined in the code
 - prefer the linear-solver API `from ortools.linear_solver import pywraplp` for MILP/LP problems
+- use `IntVar` with `CBC_MIXED_INTEGER_PROGRAMMING` for countable quantities such as people, patients, units, ads, trips, vehicles, machines, workers, shifts, hours, packages, products, or items unless fractional values are explicitly allowed
+- add linear constraints with `solver.Add(expr <= rhs)`, `solver.Add(expr >= rhs)`, or `solver.Add(expr == rhs)`; never use `solver.Constraint(...)` or `solver.SumConstraint(...)`
+- never call `objective.Minimize()` or `objective.Maximize()`; use `solver.Minimize(expr)` or `solver.Maximize(expr)`
+- never multiply two OR-Tools decision variables directly; linearize products or choose a valid supported model
 - never use the deprecated import `from ortools.algorithms import pywrapknapsack_solver`
 - avoid CP-SAT (`cp_model`) unless absolutely necessary
 - for TSP problems, use the routing solver APIs instead of writing a manual MTZ/x_ij MILP
@@ -103,6 +107,8 @@ def build_solver_hint(template_name: str) -> str:
             "- Build a faithful OR-Tools model for the question as written\n"
             "- The benchmark answer can be an optimal objective value or the requested optimal decision value\n"
             "- Store the numeric answer requested by the question in the JSON field `objective_value`\n"
+            "- Use integer variables for countable real-world quantities such as ads, trips, vehicles, people, patients, shifts, hours, packages, units, or items unless the question explicitly permits fractional values\n"
+            "- If the question asks 'how many' or asks for a number of items, report the solved requested quantity, not automatically `solver.Objective().Value()`\n"
             "- If the question asks for multiple decision values, report the benchmark's numeric target value in `objective_value` and explain the full solution in the steps"
         ),
         "resource_allocation": (
@@ -208,13 +214,26 @@ class ZhipuTeacherGenerator:
         template_name: str,
         temperatures: list[float],
         max_tokens: int = 2000,
+        answer_key: str | None = None,
+        answer_value: float | None = None,
     ) -> list[str]:
+        prompt = build_trajectory_prompt(question, template_name)
+        if answer_key:
+            integer_note = ""
+            if answer_value is not None and abs(float(answer_value) - round(float(answer_value))) <= 1e-9:
+                integer_note = " The benchmark target is integer-valued, so countable decision variables should normally be modeled as integers."
+            prompt += (
+                f"\n\nBenchmark answer target: the verifier compares `objective_value` against `{answer_key}`. "
+                "If this names a requested decision value rather than the objective function, report that solved numeric value. "
+                "For targets like 'The number of ...', `objective_value` must be that solved variable value, not the optimization objective."
+                f"{integer_note}"
+            )
         trajectories = []
         for temperature in temperatures:
             content = self.client.chat(
                 [
                     {"role": "system", "content": TRAJECTORY_SYSTEM_PROMPT},
-                    {"role": "user", "content": build_trajectory_prompt(question, template_name)},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=temperature,
                 max_tokens=max_tokens,
